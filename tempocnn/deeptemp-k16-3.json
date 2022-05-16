@@ -1,0 +1,49 @@
+{
+  "name": "DeepTemp",
+  "type": "tempo estimation",
+  "link": "https://essentia.upf.edu/models/tempo/tempo-cnn/deeptemp-k16-3.pb",
+  "version": "1",
+  "description": "This model outputs a softmax distribution of length 256 where the first index represents the probability of the track being 30 BPM and the last one the probability of being 286 BPM.",
+  "author": "Pablo Alonso",
+  "email": "pablo.alonso@upf.edu",
+  "release_date": "04/08/2020",
+  "framework": "tensorflow",
+  "framework_version": "2.3.0",
+  "programming_env": {
+    "language": "Python",
+    "version": "3.8"
+  },
+  "model_types": [
+    "frozen_model"
+  ],
+  "dataset": {
+    "name": "Extended Ballroom, LMDTempo and MTGTempo",
+    "size": "3826 30s excerpts, 3611 30s excerpts and 1158 2m excerpts",
+    "link": [
+      "http://anasynth.ircam.fr/home/media/ExtendedBallroom",
+      "https://github.com/GiantSteps/giantsteps-tempo-dataset"
+    ]
+  },
+  "schema": {
+    "inputs": [
+      {
+        "name": "input",
+        "type": "float",
+        "shape": [
+          256,
+          40
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "output",
+        "op": "Softmax",
+        "shape": [
+          256
+        ]
+      }
+    ]
+  },
+  "citation": "@inproceedings{SchreiberM19_CNNKeyTempo_SMC,\nTitle = {Musical Tempo and Key Estimation using Convolutional Neural Networks with Directional Filters},\nAuthor = {Hendrik Schreiber and Meinard M{\\\"u}ller},\nBooktitle = {Proceedings of the Sound and Music Computing Conference ({SMC})},\nPages = {47--54},\nYear = {2019},\nAddress = {M{\\'a}laga, Spain}}"
+}
