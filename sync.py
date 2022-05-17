@@ -5,6 +5,41 @@ import subprocess
 import essentia.standard as es
 from PIL import Image
 
+
+def get_durations(hit_frame_ixs, seconds_per_beat, n_frames):
+    """Calculate the duration in seconds needed for each output frame to sync the hits to the beat.
+
+    Assumptions:
+        1. The gif is a perfect loop, i.e. the last frame transitions perfectly back to the first
+        2. The audio starts on a downbeat
+    """
+
+    # TODO: address the case where the gif isn't a perfect loop
+    # TODO: provide a `first_beat` param to offset the start of the audio
+
+    durations = []
+
+    for ix, hit_frame_ix in enumerate(hit_frame_ixs):
+        next_hit_frame = (
+            hit_frame_ixs[ix + 1]
+            if ix < len(hit_frame_ixs) - 1
+            else n_frames + hit_frame_ixs[0]
+        )
+
+        # Assign an equal duration to all frames in between the hit frames to linearly interpolate the movement
+        n_bf = next_hit_frame - hit_frame_ix
+        bf_duration = seconds_per_beat / n_bf * 1000  # seconds
+
+        print(
+            f"{hit_frame_ix} to {next_hit_frame}: {n_bf} frames @ {bf_duration} ms ea"
+        )
+
+        durations.extend([bf_duration] * n_bf)
+
+    # Re-align the sequence with the input frames
+    return durations[hit_frame_ixs[0] :] + durations[: hit_frame_ixs[0]]
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -25,9 +60,10 @@ if __name__ == "__main__":
         help="The path where the output will be saved.",
     )
     parser.add_argument(
-        "--perfect_loop",
-        action="store_true",
-        help="A gif is a perfect loop if the end of a gif transitions perfectly back to the start. Note that if the input not a perfect loop, the end frames will be cut off to create one",
+        "--tempo_multiplier",
+        type=float,
+        default=1.0,
+        help="Multiplier to apply to the extracted tempo. Speeds up or slows down the animation.",
     )
     args = parser.parse_args()
 
@@ -36,7 +72,7 @@ if __name__ == "__main__":
         args.gif_filepath = "input.gif"
         args.hit_frame_ixs = [0, 4]
         args.output_filepath = "output.mp4"
-        args.perfect_loop = True
+        args.tempo_multiplier = 1
 
     # Load audio
     audio_filepath = args.audio_filepath
@@ -50,6 +86,8 @@ if __name__ == "__main__":
     print(f"BPM: {global_bpm}")
 
     beats_per_second = global_bpm / 60
+    beats_per_second *= args.tempo_multiplier
+
     seconds_per_beat = 1 / beats_per_second
 
     # Load gif
@@ -58,24 +96,8 @@ if __name__ == "__main__":
 
     hit_frame_ixs = [int(i) for i in args.hit_frame_ixs]
 
-    if args.perfect_loop:
-        hit_frame_ixs.append(im.n_frames)
-
-    # Get seconds for beats @ the estimated bpm
-    beat_times = [seconds_per_beat * i for i in range(len(hit_frame_ixs))]
-
-    # Calculate the duration of each output frame to sync the hits to the audio
-    durations = []
-    for ix, (hit_frame_ix, htime) in enumerate(zip(hit_frame_ixs, beat_times)):
-        if ix == 0:
-            continue
-
-        # Assign an equal duration to all frames in between the hit frames to linearly interpolate the movement
-        # TODO: what duration should the hit frames have?
-        n_frames_btwn = hit_frame_ix - hit_frame_ixs[ix - 1]
-        btwn_frame_duration = (htime - beat_times[ix - 1]) / n_frames_btwn * 1000  # ms
-
-        durations.extend([btwn_frame_duration] * (n_frames_btwn + 1))
+    # Get output frame durations needed for hits to sync with beats
+    durations = get_durations(hit_frame_ixs, seconds_per_beat, im.n_frames)
 
     # Create intermediate image & metadata files for ffmpeg in a temporary directory
     tmpdir = f"tmp_{os.path.splitext(os.path.basename(gif_filepath))[0]}"
