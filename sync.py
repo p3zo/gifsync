@@ -141,7 +141,6 @@ if __name__ == "__main__":
     )
 
     # Add audio and loop the video to the length of the audio
-    # TODO: output has several extra video loops after audio ends. Video should end with audio.
     subprocess.check_call(
         [
             "ffmpeg",
@@ -151,6 +150,8 @@ if __name__ == "__main__":
             tmp_vid,
             "-i",
             audio_filepath,
+            "-c:v",
+            "copy",
             "-shortest",
             "-map",
             "0:v:0",
