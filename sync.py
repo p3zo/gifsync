@@ -58,14 +58,15 @@ if __name__ == "__main__":
         help="The frames in which the 'hits' in the movement occur. Subjective and manually labeled.",
     )
     parser.add_argument(
-        "--output_filepath",
-        help="The path where the output will be saved.",
-    )
-    parser.add_argument(
         "--tempo_multiplier",
         type=float,
         default=1.0,
         help="Multiplier to apply to the extracted tempo. Speeds up or slows down the animation.",
+    )
+    parser.add_argument(
+        "--output_directory",
+        default=".",
+        help="The directory to which the output will be saved.",
     )
     args = parser.parse_args()
 
@@ -95,7 +96,8 @@ if __name__ == "__main__":
     durations = get_durations(hit_frame_ixs, seconds_per_beat, im.n_frames)
 
     # Create intermediate image & metadata files for ffmpeg in a temporary directory
-    tmpdir = f"tmp_{os.path.splitext(os.path.basename(gif_filepath))[0]}"
+    gif_name = os.path.splitext(os.path.basename(gif_filepath))[0]
+    tmpdir = f"tmp_{gif_name}"
     if not os.path.isdir(tmpdir):
         os.mkdir(tmpdir)
 
@@ -140,6 +142,11 @@ if __name__ == "__main__":
         ]
     )
 
+    audio_name = os.path.splitext(os.path.basename(audio_filepath))[0]
+    output_filepath = os.path.join(
+        args.output_directory, f"{audio_name}_{gif_name}.mp4"
+    )
+
     # Add audio and loop the video to the length of the audio
     subprocess.check_call(
         [
@@ -158,7 +165,7 @@ if __name__ == "__main__":
             "-map",
             "1:a:0",
             "-y",
-            args.output_filepath,
+            output_filepath,
         ]
     )
 
