@@ -79,6 +79,9 @@ if __name__ == "__main__":
         graphFilename="tempocnn/deeptemp-k16-3.pb"
     )(audio_11khz)
 
+    if global_bpm == 0:
+        raise RuntimeError(f"Could not estimate BPM from {audio_filepath}.")
+
     print(f"BPM: {global_bpm}")
 
     beats_per_second = global_bpm / 60
