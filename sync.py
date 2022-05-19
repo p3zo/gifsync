@@ -1,3 +1,5 @@
+"""Estimates the tempo of an audio file then reassembles the frames of a GIF to sync its animation to the beat."""
+
 import argparse
 import os
 import subprocess
@@ -67,13 +69,6 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    if not args.audio_filepath:
-        args.audio_filepath = "audio/gypsy.mp3"
-        args.gif_filepath = "input.gif"
-        args.hit_frame_ixs = [0, 4]
-        args.output_filepath = "output.mp4"
-        args.tempo_multiplier = 1
-
     # Load audio
     audio_filepath = args.audio_filepath
 
@@ -105,16 +100,20 @@ if __name__ == "__main__":
         os.mkdir(tmpdir)
 
     tmp_txt = os.path.join(tmpdir, "input.txt")
-    tmp_mp4 = os.path.join(tmpdir, "tmp.mp4")
+    tmp_vid = os.path.join(tmpdir, "tmp.mov")
 
     with open(tmp_txt, "w") as fh:
         im = Image.open(gif_filepath)
         try:
             while 1:
                 ix = im.tell()
-
+                print(f"Saving frame {ix}")
                 img_filename = f"{ix}.png"
-                im.save(os.path.join(tmpdir, img_filename), duration=durations[ix])
+                im.save(
+                    os.path.join(tmpdir, img_filename),
+                    duration=durations[ix],
+                    disposal=3,  # 3 - Restore to previous content
+                )
 
                 fh.write(f"file '{img_filename}'\n")
                 fh.write(f"duration {durations[ix]}ms\n")
@@ -125,7 +124,7 @@ if __name__ == "__main__":
 
     # Stitch the images together into a video
     # TODO: preserve transparency channels of input PNGs when concatenating
-    check = subprocess.check_call(
+    subprocess.check_call(
         [
             "ffmpeg",
             "-f",
@@ -137,33 +136,30 @@ if __name__ == "__main__":
             "-pix_fmt",
             "yuv420p",
             "-y",
-            tmp_mp4,
+            tmp_vid,
         ]
     )
 
-    if check == 0:
-        # Add audio and loop the images to the length of the audio
-        # TODO: running this script fails here with an encoding error, but copy/pasting into a REPL doesn't. Why?
-        # TODO: output has several extra video loops after audio ends. Video should end with audio.
-        check2 = subprocess.check_call(
-            [
-                "ffmpeg",
-                "-stream_loop",
-                "-1",
-                "-i",
-                tmp_mp4,
-                "-i",
-                audio_filepath,
-                "-shortest",
-                "-map",
-                "0:v:0",
-                "-map",
-                "1:a:0",
-                "-y",
-                args.output_filepath,
-            ]
-        )
+    # Add audio and loop the video to the length of the audio
+    # TODO: output has several extra video loops after audio ends. Video should end with audio.
+    subprocess.check_call(
+        [
+            "ffmpeg",
+            "-stream_loop",
+            "-1",
+            "-i",
+            tmp_vid,
+            "-i",
+            audio_filepath,
+            "-shortest",
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:a:0",
+            "-y",
+            args.output_filepath,
+        ]
+    )
 
-        # Clean up temporary files
-        if check2 == 0:
-            subprocess.run(["rm", "-rf", f"{tmpdir}"])
+    # Clean up temporary files
+    subprocess.run(["rm", "-rf", f"{tmpdir}"])

@@ -1,18 +1,21 @@
 # GIF Sync
 
-Sync GIFs to music.
-
-[Demo](./output.mp4)
+Reassembles the frames of a GIF to sync its animation to the beat of an audio file.
 
 Uses the [TempoCNN models](https://essentia.upf.edu/models.html#tempocnn) provided by Essentia.
 
+[Demo](./demo/otter.mp4) synchronizing a
+[sticker by takadabear](https://giphy.com/stickers/otter-sea-raccos-76Ezod7CxRDqivd57V)
+to [Gypsy Girl by Toman](https://www.youtube.com/watch?v=dKZQRG54vHE).
+
 ### Usage
 
-Install ffmpeg and essentia.
+Install [ffmpeg](https://ffmpeg.org), [Essentia](https://essentia.upf.edu) with TensorFlow support,
+and [Pillow](https://pillow.readthedocs.io/en/stable/installation.html).
 
     python sync.py \
-        --audio_filepath "audio/gypsy.mp3" \
-        --gif_filepath "input.gif" \
+        --audio_filepath "demo/gypsy.m4a" \
+        --gif_filepath "demo/otter.gif" \
         --hit_frame_ixs 0 4 \
-        --output_filepath "output.mp4" \
-        --perfect_loop
+        --output_filepath "demo/otter.mp4" \
+        --tempo_multiplier=1.0
