@@ -1,5 +1,3 @@
-"""Estimates the tempo of an audio file then reassembles the frames of a GIF to sync its animation to the beat."""
-
 import argparse
 import os
 import subprocess
@@ -8,63 +6,60 @@ import essentia.standard as es
 from PIL import Image
 
 
-def get_durations(hit_frame_ixs, seconds_per_beat, n_frames):
-    """Calculate the duration in seconds needed for each output frame to sync the hits to the beat.
-
-    Assumptions:
-        1. The gif is a perfect loop, i.e. the last frame transitions perfectly back to the first
-        2. The audio starts on a downbeat
-    """
-
-    # TODO: address the case where the gif isn't a perfect loop
-    # TODO: provide a `first_beat` param to offset the start of the audio
+def get_durations(beat_frames, seconds_per_beat, n_frames):
+    """Calculate the duration in seconds needed for each output frame to sync the hits to the beat."""
 
     durations = []
 
-    for ix, hit_frame_ix in enumerate(hit_frame_ixs):
-        next_hit_frame = (
-            hit_frame_ixs[ix + 1]
-            if ix < len(hit_frame_ixs) - 1
-            else n_frames + hit_frame_ixs[0]
+    for ix, bframe in enumerate(beat_frames):
+        next_bframe = (
+            beat_frames[ix + 1]
+            if ix < len(beat_frames) - 1
+            else n_frames + beat_frames[0]
         )
 
         # Assign an equal duration to all frames in between the hit frames to linearly interpolate the movement
-        n_bf = next_hit_frame - hit_frame_ix
-        bf_duration = seconds_per_beat / n_bf * 1000  # seconds
+        n = next_bframe - bframe
+        duration = seconds_per_beat / n * 1000  # seconds
 
-        print(
-            f"{hit_frame_ix} to {next_hit_frame}: {n_bf} frames @ {bf_duration} ms ea"
-        )
+        print(f"{bframe} to {next_bframe}: {n} frames @ {duration} ms ea")
 
-        durations.extend([bf_duration] * n_bf)
+        durations.extend([duration] * n)
 
     # Re-align the sequence with the input frames
-    return durations[hit_frame_ixs[0] :] + durations[: hit_frame_ixs[0]]
+    return durations[beat_frames[0] :] + durations[: beat_frames[0]]
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="""Estimates the tempo of an audio file, then reassembles the frames of a GIF to sync its movement
+        to the beat.""",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     parser.add_argument(
         "--audio_filepath",
-        help="The path to the song file to sync the gif to.",
+        type=str,
+        help="The path to the audio file.",
     )
     parser.add_argument(
         "--gif_filepath",
-        help="The path to the gif to be sync'd.",
+        type=str,
+        help="The path to the gif.",
     )
     parser.add_argument(
-        "--hit_frame_ixs",
+        "--beat_frames",
         nargs="+",
-        help="The frames in which the 'hits' in the movement occur. Subjective and manually labeled.",
+        help="The indices (zero-indexed) of the GIF frames to align with the beat.",
     )
     parser.add_argument(
         "--tempo_multiplier",
         type=float,
         default=1.0,
-        help="Multiplier to apply to the extracted tempo. Speeds up or slows down the animation.",
+        help="A multiplier applied to the extracted tempo. Speeds up or slows down the animation.",
     )
     parser.add_argument(
         "--output_directory",
+        type=str,
         default=".",
         help="The directory to which the output will be saved.",
     )
@@ -93,10 +88,10 @@ if __name__ == "__main__":
     gif_filepath = args.gif_filepath
     im = Image.open(gif_filepath)
 
-    hit_frame_ixs = [int(i) for i in args.hit_frame_ixs]
+    beat_frames = [int(i) for i in args.beat_frames]
 
-    # Get output frame durations needed for hits to sync with beats
-    durations = get_durations(hit_frame_ixs, seconds_per_beat, im.n_frames)
+    # Get output frame durations
+    durations = get_durations(beat_frames, seconds_per_beat, im.n_frames)
 
     # Create intermediate image & metadata files for ffmpeg in a temporary directory
     gif_name = os.path.splitext(os.path.basename(gif_filepath))[0]
@@ -108,7 +103,6 @@ if __name__ == "__main__":
     tmp_vid = os.path.join(tmpdir, "tmp.mov")
 
     with open(tmp_txt, "w") as fh:
-        im = Image.open(gif_filepath)
         try:
             while 1:
                 ix = im.tell()
@@ -117,7 +111,7 @@ if __name__ == "__main__":
                 im.save(
                     os.path.join(tmpdir, img_filename),
                     duration=durations[ix],
-                    disposal=3,  # 3 - Restore to previous content
+                    disposal=3,  # 3: Restore to previous content
                 )
 
                 fh.write(f"file '{img_filename}'\n")
@@ -174,3 +168,5 @@ if __name__ == "__main__":
 
     # Clean up temporary files
     subprocess.run(["rm", "-rf", f"{tmpdir}"])
+
+    print(f"Result saved to {output_filepath}")
