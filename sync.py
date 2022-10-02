@@ -47,6 +47,11 @@ if __name__ == "__main__":
         help="The path to the gif.",
     )
     parser.add_argument(
+        "--bpm",
+        type=float,
+        help="The BPM of the audio. Will be estimated if not passed.",
+    )
+    parser.add_argument(
         "--beat_frames",
         nargs="+",
         help="The indices (zero-indexed) of the GIF frames to align with the beat.",
@@ -77,7 +82,16 @@ if __name__ == "__main__":
     if global_bpm == 0:
         raise RuntimeError(f"Could not estimate BPM from {audio_filepath}.")
 
-    print(f"BPM: {global_bpm}")
+    global_bpm = args.bpm
+    if not global_bpm:
+        global_bpm, local_bpm, local_probs = es.TempoCNN(
+            graphFilename="tempocnn/deeptemp-k16-3.pb"
+        )(audio_11khz)
+
+        if global_bpm == 0:
+            raise RuntimeError(f"Could not estimate BPM from {audio_filepath}.")
+
+        print(f"Estimated BPM: {global_bpm}")
 
     beats_per_second = global_bpm / 60
     beats_per_second *= args.tempo_multiplier
