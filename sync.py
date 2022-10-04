@@ -2,32 +2,90 @@ import argparse
 import os
 import subprocess
 
+import numpy as np
 import essentia.standard as es
 from PIL import Image
 
 
-def get_durations(beat_frames, seconds_per_beat, n_frames):
-    """Calculate the duration in seconds needed for each output frame to sync the hits to the beat."""
+class EasingBase:
+    """From https://github.com/semitable/easing-functions"""
+
+    limit = (0, 1)
+
+    def __init__(self, start: float = 0, end: float = 1, duration: float = 1):
+        self.start = start
+        self.end = end
+        self.duration = duration
+
+    def func(self, t: float) -> float:
+        raise NotImplementedError
+
+    def ease(self, alpha: float) -> float:
+        t = self.limit[0] * (1 - alpha) + self.limit[1] * alpha
+        t /= self.duration
+        a = self.func(t)
+        return self.end * a + self.start * (1 - a)
+
+    def __call__(self, alpha: float) -> float:
+        return self.ease(alpha)
+
+
+class LinearInOut(EasingBase):
+    def func(self, t: float) -> float:
+        return t
+
+
+class QuadEaseInOut(EasingBase):
+    def func(self, t: float) -> float:
+        if t < 0.5:
+            return 2 * t * t
+        return (-2 * t * t) + (4 * t) - 1
+
+
+class CubicEaseInOut(EasingBase):
+    def func(self, t: float) -> float:
+        if t < 0.5:
+            return 4 * t * t * t
+        p = 2 * t - 2
+        return 0.5 * p * p * p + 1
+
+
+def get_durations(beat_frames, ms_per_beat, n_frames, interpolation="linear"):
+    """Calculate the duration in milliseconds needed to sync the output frames to the beat frames"""
+
+    if interpolation not in ["linear", "cubic", "quadratic"]:
+        raise ValueError(f"{interpolation=} not supported")
 
     durations = []
 
-    for ix, bframe in enumerate(beat_frames):
-        next_bframe = (
+    for ix, frame in enumerate(beat_frames):
+        next_frame = (
             beat_frames[ix + 1]
             if ix < len(beat_frames) - 1
             else n_frames + beat_frames[0]
         )
 
-        # Assign an equal duration to all frames in between the hit frames to linearly interpolate the movement
-        n = next_bframe - bframe
-        duration = seconds_per_beat / n * 1000  # seconds
+        n = next_frame - frame
 
-        print(f"{bframe} to {next_bframe}: {n} frames @ {duration} ms ea")
+        lerp = LinearInOut(start=0, end=ms_per_beat, duration=n)
+        if interpolation == "cubic":
+            lerp = CubicEaseInOut(start=0, end=ms_per_beat, duration=n)
+        if interpolation == "quadratic":
+            lerp = QuadEaseInOut(start=0, end=ms_per_beat, duration=n)
 
-        durations.extend([duration] * n)
+        x = np.arange(0, n + 1)
+        times = list(map(lerp, x))
+        durations.extend([i - j for i, j in zip(times[1:], times)])
 
     # Re-align the sequence with the input frames
-    return durations[beat_frames[0] :] + durations[: beat_frames[0]]
+    aligned = durations[beat_frames[0] :] + durations[: beat_frames[0]]
+
+    if any([i < 2 for i in aligned]):
+        print(
+            "WARNING: Durations less than 2ms are not processed well by ffmpeg (TODO: source?).\nTry using fewer beat frames or a different interpolation method."
+        )
+
+    return aligned
 
 
 if __name__ == "__main__":
@@ -63,6 +121,12 @@ if __name__ == "__main__":
         help="A multiplier applied to the extracted tempo. Speeds up or slows down the animation.",
     )
     parser.add_argument(
+        "--interpolation",
+        type=str,
+        default="linear",
+        help="The method of interpolation to use. Options: [linear, cubic, quadratic]",
+    )
+    parser.add_argument(
         "--output_directory",
         type=str,
         default=".",
@@ -75,12 +139,6 @@ if __name__ == "__main__":
 
     # Estimate BPM
     audio_11khz = es.MonoLoader(filename=audio_filepath, sampleRate=11025)()
-    global_bpm, local_bpm, local_probs = es.TempoCNN(
-        graphFilename="tempocnn/deeptemp-k16-3.pb"
-    )(audio_11khz)
-
-    if global_bpm == 0:
-        raise RuntimeError(f"Could not estimate BPM from {audio_filepath}.")
 
     global_bpm = args.bpm
     if not global_bpm:
@@ -97,6 +155,7 @@ if __name__ == "__main__":
     beats_per_second *= args.tempo_multiplier
 
     seconds_per_beat = 1 / beats_per_second
+    ms_per_beat = seconds_per_beat * 1000
 
     # Load gif
     gif_filepath = args.gif_filepath
@@ -104,8 +163,10 @@ if __name__ == "__main__":
 
     beat_frames = [int(i) for i in args.beat_frames]
 
-    # Get output frame durations
-    durations = get_durations(beat_frames, seconds_per_beat, im.n_frames)
+    # Get output frame durations in ms
+    durations = get_durations(
+        beat_frames, ms_per_beat, im.n_frames, interpolation=args.interpolation
+    )
 
     # Create intermediate image & metadata files for ffmpeg in a temporary directory
     gif_name = os.path.splitext(os.path.basename(gif_filepath))[0]
