@@ -16,13 +16,18 @@ x [Epik High - 낙화 (落花) {The Falling Flower}](https://www.youtube.com/wat
 
 ## Usage
 
-Install [ffmpeg](https://ffmpeg.org), [Essentia](https://essentia.upf.edu) with TensorFlow support,
-and [Pillow](https://pillow.readthedocs.io/en/stable/installation.html).
+Install [Docker Compose](https://docs.docker.com/compose/install/) and start the Docker daemon.
 
-Find an audio file that starts exactly on beat. Find a GIF and identify which of its frames you want to align with the
+Build the container with Essentia, Tensorflow, and ffmpeg
+
+    docker compose build
+
+Start the container and get a shell inside
+
+    docker compose up -d && docker compose exec app bash
+
+Find an audio file that starts exactly on beat. Find a GIF and label the frames you want to align to the
 beat. Pass them to the `sync.py` script as in the example below.
-
-##### Example
 
     python sync.py \
         --audio_filepath "demo/gypsy.m4a" \
@@ -31,8 +36,14 @@ beat. Pass them to the `sync.py` script as in the example below.
 
 ##### Optional arguments
 
-      --tempo_multiplier TEMPO_MULTIPLIER
-            A multiplier applied to the extracted tempo. Speeds up or slows down the animation. (default: 1.0)
+    --tempo_multiplier TEMPO_MULTIPLIER
+        A multiplier applied to the extracted tempo. Speeds up or slows down the animation. (default: 1.0)
 
-      --output_directory OUTPUT_DIRECTORY
-            The directory to which the output will be saved. (default: .)
+    --output_directory OUTPUT_DIRECTORY
+        The directory to which the output will be saved. (default: .)
+
+    --bpm BPM
+        The BPM of the audio. Will be estimated if not passed. (default: None)
+
+    --interpolation INTERPOLATION
+        The method of interpolation to use. Options: [linear, cubic, quadratic] (default: linear)

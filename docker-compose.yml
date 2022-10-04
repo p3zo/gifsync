@@ -1,0 +1,11 @@
+version: "3"
+
+services:
+  app:
+    restart: always
+    build: .
+    expose:
+      - "5000"
+    volumes:
+      - .:/opt/gifsync
+    entrypoint: ["sh", "-c", "sleep infinity"]
