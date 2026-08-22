@@ -215,7 +215,6 @@ input[type=color] { width: 2.4rem; height: 1.7rem; padding: 1px; border: 1px sol
 }
 #log:empty::before { content: "Nothing yet."; color: var(--dim); }
 .make { justify-content: flex-end; }
-.hits { margin-top: .9rem; }
 /* the legend is already a dense line of small text; the fold needs air under it */
 
 #gifCredit { margin-top: .6rem; }
@@ -269,6 +268,7 @@ input[type=color] { width: 2.4rem; height: 1.7rem; padding: 1px; border: 1px sol
 .prose p { margin: 0 0 .8rem; }
 .prose ol, .prose ul { margin: 0 0 .8rem; padding-left: 1.25rem; }
 .prose li { margin-bottom: .35rem; }
+.prose strong { color: var(--ink); font-weight: 600; }
 .prose a { color: var(--ink); }
 
 /* Anything transient goes to the same corner, so no part of the page has to keep room
@@ -405,6 +405,17 @@ details.more .row { margin-top: .6rem; }
           <button id="clearBeatsBtn">Clear all beats</button>
         </div>
         <div class="row">
+          <label>The GIF hits
+            <select id="hits">
+              <option value="0.25">every 4 beats</option>
+              <option value="0.5">every 2 beats</option>
+              <option value="1" selected>every beat</option>
+              <option value="2">twice a beat</option>
+              <option value="4">four times a beat</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
           <label>Between beats
             <select id="interpolation">
               <option value="linear">even</option>
@@ -434,21 +445,8 @@ details.more .row { margin-top: .6rem; }
     </div>
   </div>
 
-  <div class="row hits">
-    <label>The GIF hits
-      <select id="hits">
-        <option value="0.25">every 4 beats</option>
-        <option value="0.5">every 2 beats</option>
-        <option value="1" selected>every beat</option>
-        <option value="2">twice a beat</option>
-        <option value="4">four times a beat</option>
-      </select>
-    </label>
-  </div>
-
   <div class="row make">
-    <button id="renderBrowserBtn" class="primary">Make the video</button>
-    <label><input type="checkbox" id="endCard"> End with a Gifsync card</label>
+    <button id="renderBrowserBtn" class="primary">Save the video</button>
   </div>
   </div>
 </section>
@@ -464,13 +462,17 @@ details.more .row { margin-top: .6rem; }
 
 <article class="prose">
 
-<h2>How to sync a GIF to a song</h2>
+<h2>How to use it</h2>
 <ol>
-  <li>Drop in a GIF. Gifsync marks the frames it thinks the beat should land on.</li>
-  <li>Drop in a song. It works out the tempo and marks the first few beats.</li>
-  <li>Fix what it got wrong. Move the marks, type the tempo, or tap it out.</li>
-  <li>Choose how often the GIF hits, and what happens between beats.</li>
-  <li>Play the preview, then make the video.</li>
+  <li><strong>Drop in a GIF.</strong> Gifsync marks the frames it thinks the beat should
+    land on.</li>
+  <li><strong>Drop in a song.</strong> It works out the tempo and marks the first few
+    beats.</li>
+  <li><strong>Fix what it got wrong.</strong> Move the marks, type the tempo, or tap it
+    out.</li>
+  <li><strong>Choose the timing.</strong> How often the GIF hits, and what happens between
+    beats.</li>
+  <li><strong>Save the video.</strong></li>
 </ol>
 
 </article>
@@ -827,33 +829,6 @@ function paintFrame(ctx, frame, width, height) {
   ctx.fillStyle = "#000000";
   ctx.fillRect(0, 0, width, height);
   ctx.drawImage(state.frames[frame], 0, 0);
-}
-
-// A second and a bit on the end of the video saying where it was made, for a file that is
-// going to be posted somewhere this page is not. Off unless it is asked for: a mark nobody
-// chose is a reason to avoid a tool, and it stops the video looping cleanly.
-const END_CARD_MS = 1200;
-
-function drawEndCard(ctx, width, height) {
-  ctx.fillStyle = "#131316";
-  ctx.fillRect(0, 0, width, height);
-  ctx.textAlign = "center";
-
-  // These videos are 96px across as often as they are 600, so both lines are sized to the
-  // frame and then shrunk until they fit across it
-  const line = (text, weight, share, colour, y) => {
-    let size = Math.max(6, Math.round(height * share));
-    ctx.font = `${weight} ${size}px system-ui, -apple-system, sans-serif`;
-    while (size > 6 && ctx.measureText(text).width > width * 0.86) {
-      size -= 1;
-      ctx.font = `${weight} ${size}px system-ui, -apple-system, sans-serif`;
-    }
-    ctx.fillStyle = colour;
-    ctx.fillText(text, width / 2, y);
-  };
-
-  line("gifsync", 700, 0.15, "#f06595", Math.round(height * 0.5));
-  line("p3zo.github.io/gifsync", 400, 0.075, "#9a9aa6", Math.round(height * 0.64));
 }
 
 // Everything that has to follow the selected frame, and nothing that does not: this runs
@@ -1283,6 +1258,28 @@ function drawWave(playheadSeconds = null) {
     ctx.fill(grid);
     ctx.fillStyle = css.getPropertyValue("--loop");
     ctx.fill(loop);
+  }
+
+  // The song's own pulse, all the way along. Only the first few beats are ever marked, and
+  // a row of lines that stopped two seconds in read as though the estimate had given up.
+  // This is the song's beat, so it is 60/bpm, not the gif's hit rate.
+  const bpm = parseFloat($("bpm").value);
+  const beatSeconds = bpm > 0 ? 60 / bpm : 0;
+  if (beatSeconds && (beatSeconds / duration) * w >= 3) {
+    const pulse = new Path2D();
+    // from the downbeat's phase, so the grid covers the song ahead of the first mark too
+    for (let t = downbeat() % beatSeconds; t < duration; t += beatSeconds) {
+      const x = at(t);
+      pulse.moveTo(x, 0);
+      pulse.lineTo(x, h);
+    }
+    ctx.save();
+    // faint, because the marks a person placed have to stay the louder of the two
+    ctx.globalAlpha = 0.3;
+    ctx.strokeStyle = css.getPropertyValue("--accent");
+    ctx.lineWidth = 1;
+    ctx.stroke(pulse);
+    ctx.restore();
   }
 
   const beatLines = new Path2D();
@@ -1820,7 +1817,7 @@ async function estimateSong({ keepExistingBeats }) {
       beatsAreEstimates = true;
     }
 
-    $("estimateNote").innerHTML = `Sounds like <b>${bpm} BPM</b>.` +
+    $("estimateNote").innerHTML = `Estimated <b>${bpm} BPM</b>.` +
       // the model always names a tempo; when the vote is this split it is often the wrong one
       (confidence < 0.5 ? ` <span class="warn">It is not sure though, so play it back and check.</span>` : "");
     refresh();
@@ -2272,10 +2269,9 @@ async function encodeVideo(schedule, width, height) {
   let lastKeyUs = -Infinity;
 
   for (let i = 0; i < schedule.length; i++) {
-    const { frame, card, tsUs, durationUs } = schedule[i];
+    const { frame, tsUs, durationUs } = schedule[i];
 
-    if (card) drawEndCard(ctx, width, height);
-    else paintFrame(ctx, frame, width, height);
+    paintFrame(ctx, frame, width, height);
 
     const keyFrame = tsUs - lastKeyUs >= 2e6;
     if (keyFrame) lastKeyUs = tsUs;
@@ -2499,12 +2495,6 @@ $("renderBrowserBtn").onclick = async () => {
     const height = state.height + (state.height % 2);
 
     const schedule = buildSchedule(timing, seconds);
-    if ($("endCard").checked) {
-      const last = schedule[schedule.length - 1];
-      // One sample held for the whole card: the mp4 carries a duration per sample, and the
-      // video track is allowed to outrun the audio track by that much
-      schedule.push({ card: true, tsUs: last.tsUs + last.durationUs, durationUs: END_CARD_MS * 1000 });
-    }
     log(`Rendering ${schedule.length} frames over ${seconds.toFixed(2)}s at ${width}×${height}`);
     toast("render", "Drawing the video… 0%", { stay: true });
 
