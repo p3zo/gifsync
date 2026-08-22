@@ -579,6 +579,7 @@ details.more .row { margin-top: .6rem; }
   <div class="row make">
     <button id="renderBrowserBtn" class="primary">Make the video</button>
     <button id="shareBtn" hidden>Copy a link to this setup</button>
+    <label><input type="checkbox" id="endCard"> End with a Gifsync card</label>
   </div>
   </div>
 </section>
@@ -1059,6 +1060,33 @@ function paintFrame(ctx, frame, width, height) {
   ctx.fillStyle = "#000000";
   ctx.fillRect(0, 0, width, height);
   ctx.drawImage(state.frames[frame], 0, 0);
+}
+
+// A second and a bit on the end of the video saying where it was made, for a file that is
+// going to be posted somewhere this page is not. Off unless it is asked for: a mark nobody
+// chose is a reason to avoid a tool, and it stops the video looping cleanly.
+const END_CARD_MS = 1200;
+
+function drawEndCard(ctx, width, height) {
+  ctx.fillStyle = "#131316";
+  ctx.fillRect(0, 0, width, height);
+  ctx.textAlign = "center";
+
+  // These videos are 96px across as often as they are 600, so both lines are sized to the
+  // frame and then shrunk until they fit across it
+  const line = (text, weight, share, colour, y) => {
+    let size = Math.max(6, Math.round(height * share));
+    ctx.font = `${weight} ${size}px system-ui, -apple-system, sans-serif`;
+    while (size > 6 && ctx.measureText(text).width > width * 0.86) {
+      size -= 1;
+      ctx.font = `${weight} ${size}px system-ui, -apple-system, sans-serif`;
+    }
+    ctx.fillStyle = colour;
+    ctx.fillText(text, width / 2, y);
+  };
+
+  line("gifsync", 700, 0.15, "#f06595", Math.round(height * 0.5));
+  line("p3zo.github.io/gifsync", 400, 0.075, "#9a9aa6", Math.round(height * 0.64));
 }
 
 // Everything that has to follow the selected frame, and nothing that does not: this runs
@@ -2487,9 +2515,10 @@ async function encodeVideo(schedule, width, height) {
   let lastKeyUs = -Infinity;
 
   for (let i = 0; i < schedule.length; i++) {
-    const { frame, tsUs, durationUs } = schedule[i];
+    const { frame, card, tsUs, durationUs } = schedule[i];
 
-    paintFrame(ctx, frame, width, height);
+    if (card) drawEndCard(ctx, width, height);
+    else paintFrame(ctx, frame, width, height);
 
     const keyFrame = tsUs - lastKeyUs >= 2e6;
     if (keyFrame) lastKeyUs = tsUs;
@@ -2713,6 +2742,12 @@ $("renderBrowserBtn").onclick = async () => {
     const height = state.height + (state.height % 2);
 
     const schedule = buildSchedule(timing, seconds);
+    if ($("endCard").checked) {
+      const last = schedule[schedule.length - 1];
+      // One sample held for the whole card: the mp4 carries a duration per sample, and the
+      // video track is allowed to outrun the audio track by that much
+      schedule.push({ card: true, tsUs: last.tsUs + last.durationUs, durationUs: END_CARD_MS * 1000 });
+    }
     log(`Rendering ${schedule.length} frames over ${seconds.toFixed(2)}s at ${width}×${height}`);
     toast("render", "Drawing the video… 0%", { stay: true });
 
