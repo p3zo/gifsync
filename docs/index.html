@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>gifsync beat marker</title>
+<title>Gifsync - Sync GIFs to music</title>
 <style>
 :root {
   --bg: #ffffff; --panel: #f4f4f5; --line: #d9d9de; --ink: #18181b;
@@ -23,11 +23,13 @@ body {
   margin: 0; padding: 0 1.25rem 4rem; background: var(--bg); color: var(--ink);
   font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
-header {
-  display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap;
-  max-width: 68rem; margin: 0 auto; padding: 1.5rem 0 1rem;
+header { max-width: 68rem; margin: 0 auto; padding: 1.5rem 0 1rem; }
+h1 { font-size: 1.3rem; margin: 0 0 .4rem; letter-spacing: -.01em; }
+#intro { margin: 0; max-width: 46rem; color: var(--dim); font-size: .925rem; }
+kbd {
+  font: inherit; font-family: var(--mono); font-size: .8em; padding: .05em .35em;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink);
 }
-h1 { font-size: 1.15rem; margin: 0; letter-spacing: -.01em; }
 h2 { font-size: .8rem; margin: 0 0 .75rem; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); }
 main { max-width: 68rem; margin: 0 auto; display: grid; gap: 1rem; }
 section {
@@ -86,7 +88,10 @@ a#download[hidden] { display: none; }
 <body>
 
 <header>
-  <h1>gifsync beat marker</h1>
+  <h1>Gifsync - Sync GIFs to music</h1>
+  <p id="intro">Drop in a GIF and mark the frames where you want the beat to hit. Drop in a song
+  and mark its beats: click them on the waveform, or tap <kbd>B</kbd> along to the music. Play it
+  back to check, nudge anything that feels off, then render and download.</p>
 </header>
 
 <main>
@@ -270,6 +275,9 @@ function wireDrop(dropId, inputId, onFile) {
 }
 
 async function loadGif(file) {
+  // A playing source keeps the buffer and frames it started with, so it would carry on
+  // against a page that has already moved to the new file
+  stopPlayback();
   $("gifDrop").textContent = `Decoding ${file.name}…`;
 
   const decoder = new ImageDecoder({ data: await file.arrayBuffer(), type: "image/gif" });
@@ -368,6 +376,9 @@ addEventListener("keydown", (e) => {
 const actx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
 
 async function loadAudio(file) {
+  stopPlayback();
+  // the previous song's tempo estimate does not describe this one
+  $("estimateNote").textContent = "";
   $("audioDrop").textContent = `Decoding ${file.name}…`;
 
   const bytes = await file.arrayBuffer();
@@ -379,6 +390,10 @@ async function loadAudio(file) {
   $("audioDrop").textContent =
     `${file.name} — ${state.audioBuffer.duration.toFixed(2)}s. Drop another to replace.`;
   $("audioBody").hidden = false;
+
+  // Fetching the tempo model is most of the wait on a first estimate, so start it now
+  // rather than when the button is pressed. Nothing here depends on it arriving.
+  loadTempoModel().catch(() => {});
 
   refresh();
 }
@@ -636,17 +651,19 @@ $("tapBtn").onclick = () => {
 
 /* ------------------------------------------------------------ tempo estimate */
 
+/* --- tempo:start --- pinned by docs/test_tempo.mjs against tempo_cases.json --- */
+
 // TempoCNN's front end, matched against essentia's TensorflowInputTempoCNN: 11025Hz mono,
 // 1024-sample frames every 512, Hann, magnitude spectrum, 40 Slaney mel bands over
 // 20-5000Hz with unit-triangle normalisation. Reproduces essentia's mel matrix to 1.5e-7.
-const TEMPO_SR = 11025, TEMPO_FRAME = 1024, TEMPO_HOP = 512, TEMPO_BANDS = 40, TEMPO_PATCH = 256;
+export const TEMPO_SR = 11025, TEMPO_FRAME = 1024, TEMPO_HOP = 512, TEMPO_BANDS = 40, TEMPO_PATCH = 256;
 
 const MEL_F_SP = 200 / 3, MEL_LOG_HZ = 1000;
 const MEL_LOG_STEP = Math.log(6.4) / 27, MEL_LOG_MEL = MEL_LOG_HZ / MEL_F_SP;
 const hzToMel = (f) => (f < MEL_LOG_HZ ? f / MEL_F_SP : MEL_LOG_MEL + Math.log(f / MEL_LOG_HZ) / MEL_LOG_STEP);
 const melToHz = (m) => (m < MEL_LOG_MEL ? m * MEL_F_SP : MEL_LOG_HZ * Math.exp(MEL_LOG_STEP * (m - MEL_LOG_MEL)));
 
-function melFilterbank(lo = 20, hi = 5000) {
+export function melFilterbank(lo = 20, hi = 5000) {
   const bins = TEMPO_FRAME / 2 + 1;
   const loMel = hzToMel(lo), hiMel = hzToMel(hi);
   const edges = Array.from({ length: TEMPO_BANDS + 2 }, (_, i) =>
@@ -667,30 +684,55 @@ function melFilterbank(lo = 20, hi = 5000) {
   });
 }
 
+// The twiddle factors are the same for every frame, and a track is thousands of frames,
+// so computing them once instead of per butterfly is most of the cost of the analysis
+let twiddle = null;
+
+function twiddlesFor(n) {
+  if (twiddle?.n !== n) {
+    const cos = new Float64Array(n / 2), sin = new Float64Array(n / 2);
+    for (let i = 0; i < n / 2; i++) {
+      cos[i] = Math.cos((-2 * Math.PI * i) / n);
+      sin[i] = Math.sin((-2 * Math.PI * i) / n);
+    }
+    twiddle = { n, cos, sin };
+  }
+  return twiddle;
+}
+
 function fft(re, im) {
   const n = re.length;
+  const { cos, sin } = twiddlesFor(n);
+
   for (let i = 1, j = 0; i < n; i++) {
     let bit = n >> 1;
     for (; j & bit; bit >>= 1) j ^= bit;
     j ^= bit;
     if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; }
   }
+
   for (let len = 2; len <= n; len <<= 1) {
-    const ang = (-2 * Math.PI) / len;
+    const half = len >> 1, step = n / len;
     for (let i = 0; i < n; i += len) {
-      for (let k = 0; k < len / 2; k++) {
-        const wr = Math.cos(ang * k), wi = Math.sin(ang * k);
+      for (let k = 0; k < half; k++) {
+        const wr = cos[k * step], wi = sin[k * step];
         const ur = re[i + k], ui = im[i + k];
-        const vr = re[i + k + len / 2] * wr - im[i + k + len / 2] * wi;
-        const vi = re[i + k + len / 2] * wi + im[i + k + len / 2] * wr;
+        const xr = re[i + k + half], xi = im[i + k + half];
+        const vr = xr * wr - xi * wi, vi = xr * wi + xi * wr;
         re[i + k] = ur + vr; im[i + k] = ui + vi;
-        re[i + k + len / 2] = ur - vr; im[i + k + len / 2] = ui - vi;
+        re[i + k + half] = ur - vr; im[i + k + half] = ui - vi;
       }
     }
   }
 }
 
-function melSpectrogram(samples) {
+export function melFrameCount(sampleCount) {
+  return Math.max(0, Math.floor((sampleCount - TEMPO_FRAME) / TEMPO_HOP) + 1);
+}
+
+// fromFrame/frameLimit let a caller take this in slices and yield between them; the
+// defaults compute the whole thing in one go
+export function melSpectrogram(samples, fromFrame = 0, frameLimit = Infinity) {
   const fb = melFilterbank();
   const bins = TEMPO_FRAME / 2 + 1;
   // denominator is size-1, which is the Hann essentia uses
@@ -698,16 +740,21 @@ function melSpectrogram(samples) {
     0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (TEMPO_FRAME - 1)));
 
   const rows = [];
-  for (let at = 0; at + TEMPO_FRAME <= samples.length; at += TEMPO_HOP) {
-    const re = new Float64Array(TEMPO_FRAME), im = new Float64Array(TEMPO_FRAME);
-    for (let i = 0; i < TEMPO_FRAME; i++) re[i] = samples[at + i] * window[i];
+  const re = new Float64Array(TEMPO_FRAME), im = new Float64Array(TEMPO_FRAME);
+  const magnitude = new Float64Array(bins);
+  const last = Math.min(melFrameCount(samples.length), fromFrame + frameLimit);
+
+  for (let f = fromFrame; f < last; f++) {
+    const at = f * TEMPO_HOP;
+    for (let i = 0; i < TEMPO_FRAME; i++) { re[i] = samples[at + i] * window[i]; im[i] = 0; }
     fft(re, im);
+    for (let k = 0; k < bins; k++) magnitude[k] = Math.sqrt(re[k] * re[k] + im[k] * im[k]);
 
     const row = new Float64Array(TEMPO_BANDS);
     for (let b = 0; b < TEMPO_BANDS; b++) {
       const { start, weights } = fb[b];
       let acc = 0;
-      for (let i = 0; i < weights.length; i++) acc += Math.hypot(re[start + i], im[start + i]) * weights[i];
+      for (let i = 0; i < weights.length; i++) acc += magnitude[start + i] * weights[i];
       row[b] = acc;
     }
     rows.push(row);
@@ -715,16 +762,32 @@ function melSpectrogram(samples) {
   return rows;
 }
 
+/* --- tempo:end --- */
+
+// Cache the promise rather than the result, so a preload already in flight is shared
+// instead of a second load starting alongside it
 let tempoModel = null;
 
-async function loadTempoModel() {
-  if (tempoModel) return tempoModel;
-  const tf = await import("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/+esm");
-  await tf.ready();
-  return (tempoModel = { tf, model: await tf.loadGraphModel("tempocnn/model.json") });
+function loadTempoModel() {
+  tempoModel ??= (async () => {
+    const tf = await import("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/+esm");
+    await tf.ready();
+    const model = await tf.loadGraphModel("tempocnn/model.json");
+
+    // The first inference is where the backend compiles its kernels, several seconds of
+    // it on WebGL. Spend that here, during the preload, instead of on the button press.
+    const warmup = tf.zeros([1, TEMPO_BANDS, TEMPO_PATCH, 1]);
+    const discard = model.execute(warmup);
+    await discard.data();
+    warmup.dispose();
+    discard.dispose();
+
+    return { tf, model };
+  })().catch((err) => { tempoModel = null; throw err; });
+  return tempoModel;
 }
 
-async function estimateBpm(buffer) {
+async function estimateBpm(buffer, onProgress = () => {}) {
   const { tf, model } = await loadTempoModel();
 
   const offline = new OfflineAudioContext(1, Math.ceil(buffer.duration * TEMPO_SR), TEMPO_SR);
@@ -732,10 +795,21 @@ async function estimateBpm(buffer) {
   source.buffer = buffer;
   source.connect(offline.destination);
   source.start();
-  const mel = melSpectrogram((await offline.startRendering()).getChannelData(0));
+  const mono = (await offline.startRendering()).getChannelData(0);
 
-  if (mel.length < TEMPO_PATCH) {
+  const total = melFrameCount(mono.length);
+  if (total < TEMPO_PATCH) {
     throw new Error(`Need about ${Math.ceil((TEMPO_PATCH * TEMPO_HOP) / TEMPO_SR)}s of audio to estimate the tempo.`);
+  }
+
+  // A few thousand FFTs in one go locks the page up for seconds, so hand control back
+  // between slices and let it keep drawing
+  const mel = [];
+  const SLICE = 128;
+  for (let f = 0; f < total; f += SLICE) {
+    mel.push(...melSpectrogram(mono, f, SLICE));
+    onProgress(`analysing ${Math.round((100 * mel.length) / total)}%`);
+    await new Promise((r) => setTimeout(r, 0));
   }
 
   // The model reads one 256-frame patch at a time; average the votes across the track
@@ -762,6 +836,8 @@ async function estimateBpm(buffer) {
     input.dispose();
     output.dispose();
     patches++;
+    onProgress(`matching tempo, window ${patches}`);
+    await new Promise((r) => setTimeout(r, 0));
   }
 
   let best = 0;
@@ -777,7 +853,8 @@ $("estimateBtn").onclick = async () => {
   button.disabled = true;
   button.textContent = "Estimating…";
   try {
-    const { bpm, confidence, patches } = await estimateBpm(state.audioBuffer);
+    const { bpm, confidence, patches } = await estimateBpm(
+      state.audioBuffer, (note) => { $("estimateNote").textContent = note; });
     $("bpm").value = bpm.toFixed(1);
     $("estimateNote").textContent =
       `${bpm} BPM from ${patches} window${patches > 1 ? "s" : ""}, confidence ${confidence.toFixed(2)}`;
