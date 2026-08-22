@@ -44,6 +44,127 @@
   "codeRepository": "https://github.com/p3zo/gifsync"
 }
 </script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  "name": "How to sync a GIF to the beat of a song",
+  "description": "Retime a GIF's frames so its animation lands on the beat of a song, and save the result as an MP4.",
+  "totalTime": "PT3M",
+  "tool": [
+    {
+      "@type": "HowToTool",
+      "name": "Gifsync"
+    }
+  ],
+  "supply": [
+    {
+      "@type": "HowToSupply",
+      "name": "An animated GIF"
+    },
+    {
+      "@type": "HowToSupply",
+      "name": "An audio file"
+    }
+  ],
+  "step": [
+    {
+      "@type": "HowToStep",
+      "position": 1,
+      "name": "Drop in a GIF",
+      "text": "Drop in a GIF. Gifsync decodes it frame by frame and marks a first guess at which frames the beat should land on."
+    },
+    {
+      "@type": "HowToStep",
+      "position": 2,
+      "name": "Drop in a song",
+      "text": "Drop in a song. It listens to the track, estimates the tempo, and marks the first few beats on the waveform to show you the pace it heard."
+    },
+    {
+      "@type": "HowToStep",
+      "position": 3,
+      "name": "Check the marks",
+      "text": "Check the marks. Play the preview. Move a beat frame, retype the tempo, or tap along to the music if the estimate has it wrong."
+    },
+    {
+      "@type": "HowToStep",
+      "position": 4,
+      "name": "Choose how often the GIF hits",
+      "text": "Choose how often the GIF hits. Once a beat by default; half time and double time are one dropdown away."
+    },
+    {
+      "@type": "HowToStep",
+      "position": 5,
+      "name": "Make the video",
+      "text": "Make the video. You get an MP4 of the retimed animation with the song in it, looped to the length of the audio."
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Does Gifsync upload my GIF or my song?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. Both are decoded, retimed and encoded inside the page, and neither is ever sent anywhere. The page does fetch a tempo model the first time you ask it to listen to a song, and it counts page views with Google Analytics; neither of those carries anything about your files."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is it free?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. No account, no sign-in, no watermark, no limit on how many videos you make."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Why does it save an MP4 instead of a GIF?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A GIF cannot carry audio. The retimed animation could be written back out as a GIF, but then it would be silent, which defeats the point of syncing it to a song."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What if the tempo it guesses is wrong?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Type the right one into the tempo box, or press the tap button in time with the music and let it work the tempo out from that. You can also click the waveform wherever you hear a beat."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can it keep the transparent background?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. Transparency is flattened onto black, in the preview as well as in the render. No browser video encoder will keep an alpha channel in an MP4, so the choice is between a black background and a file most people cannot play."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Which browsers does it work in?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "It needs WebCodecs, which means a recent Chrome, Edge or Safari. The page checks when it loads and says so if anything it needs is missing."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Where do the GIFs in the picker come from?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Wikimedia Commons, whose animated GIF category is around 31,000 files deep. Commons needs no API key, answers cross-origin, and states a licence for every file, so what you make from one is yours to post. The author and the licence stay on screen while you work."
+      }
+    }
+  ]
+}
+</script>
 
 <!-- Page views only. Nothing about the gif or the song is measured or sent anywhere: both
      are decoded, retimed and encoded in this tab and never leave it. Off a file:// url
@@ -260,6 +381,24 @@ input[type=color] { width: 2.4rem; height: 1.7rem; padding: 1px; border: 1px sol
   background: var(--panel); color: var(--dim); font-size: .75rem;
 }
 
+/* The reading matter under the tool. It is not part of using the thing, so it takes the
+   width of a column of text rather than the width of the page. */
+.prose { max-width: 46rem; margin: 2.75rem auto 0; }
+.prose h2 { display: block; font-size: 1.05rem; margin: 2rem 0 .6rem; }
+.prose h3 { font-size: .925rem; margin: 1.25rem 0 .3rem; }
+.prose p, .prose li { color: var(--dim); font-size: .925rem; }
+.prose p { margin: 0 0 .8rem; }
+.prose ol, .prose ul { margin: 0 0 .8rem; padding-left: 1.25rem; }
+.prose li { margin-bottom: .35rem; }
+.prose strong { color: var(--ink); font-weight: 600; }
+.prose a { color: var(--ink); }
+.prose .scroll { overflow-x: auto; margin-bottom: .8rem; }
+.prose table { border-collapse: collapse; font-size: .875rem; width: 100%; }
+.prose th, .prose td { border-bottom: 1px solid var(--line); padding: .35rem .7rem .35rem 0;
+  text-align: left; white-space: nowrap; }
+.prose th { color: var(--ink); font-weight: 600; }
+.prose td { color: var(--dim); font-variant-numeric: tabular-nums; }
+
 /* Anything transient goes to the same corner, so no part of the page has to keep room
    free for a message that is usually not there. */
 #toasts {
@@ -452,6 +591,110 @@ details.more .row { margin-top: .6rem; }
 </div>
 
 </main>
+
+<article class="prose">
+
+<h2>How to sync a GIF to a song</h2>
+<ol>
+  <li><strong>Drop in a GIF.</strong> Gifsync decodes it frame by frame and marks a first
+    guess at which frames the beat should land on.</li>
+  <li><strong>Drop in a song.</strong> It listens to the track, estimates the tempo, and
+    marks the first few beats on the waveform to show you the pace it heard.</li>
+  <li><strong>Check the marks.</strong> Play the preview. Move a beat frame, retype the
+    tempo, or tap along to the music if the estimate has it wrong.</li>
+  <li><strong>Choose how often the GIF hits.</strong> Once a beat by default; half time and
+    double time are one dropdown away.</li>
+  <li><strong>Make the video.</strong> You get an MP4 of the retimed animation with the
+    song in it, looped to the length of the audio.</li>
+</ol>
+
+<h2>Why a GIF drifts out of time when you just add music to it</h2>
+<p>Most tools that offer to add music to a GIF lay an audio track underneath and leave the
+animation alone. The GIF keeps whatever frame delays it was saved with, the song keeps its
+own tempo, and unless the loop happens to be a whole number of beats long the two slide
+apart — a little further on every loop.</p>
+<p>Gifsync changes the animation instead of the audio. A GIF stores a duration per frame,
+so retiming one adds nothing and drops nothing: the frames are simply held for different
+lengths. Each pair of marked frames is stretched to span exactly one beat, and the last
+wraps around to the first, so the loop closes on a beat and stays closed for as long as
+the song runs.</p>
+
+<h2>How many beats should one loop last?</h2>
+<p>Nothing in the pixels settles this — it is a judgement about the animation, and the
+same GIF can look right at half the speed or twice it. What the marks decide is the
+count: mark eight frames and one loop covers eight beats.</p>
+<p>One thing is not a judgement. A beat covers a whole number of frames, so a count that
+does not divide the frame count leaves some beats holding a frame more than others: twenty
+frames over eight beats has to alternate three and two, and that 50% swing in speed is
+plain to see. Gifsync moves its own suggestion to a nearby divisor for that reason.</p>
+
+<h2>What the easing does</h2>
+<p>Spreading a beat evenly across the frames between two marks moves the animation at a
+constant speed, so only the marked frames are really on the beat. The eased curves hold
+the frames midway between beats and flash through the ones on either side of the beat
+itself, so the motion snaps on the beat and drifts between them. It changes the character
+of the movement more than you would expect. Over a 500ms beat and eight frames:</p>
+<div class="scroll"><table>
+  <thead><tr><th>Between beats</th><th>Per-frame durations (ms)</th></tr></thead>
+  <tbody>
+    <tr><td>even</td><td>62.5 each</td></tr>
+    <tr><td>ease in and out more</td><td>3.9, 27.3, 74.2, 144.5, 144.5, 74.2, 27.3, 3.9</td></tr>
+  </tbody>
+</table></div>
+
+<h2>Frame timing at common tempos</h2>
+<p>How long one beat lasts, and how long each frame is held if that beat is spread evenly
+across 8, 12 or 16 frames.</p>
+<div class="scroll"><table>
+  <thead><tr><th>Tempo</th><th>One beat</th><th>8 frames</th><th>12 frames</th><th>16 frames</th></tr></thead>
+  <tbody>
+    <tr><td>100 BPM</td><td>600.0ms</td><td>75.0ms</td><td>50.0ms</td><td>37.5ms</td></tr>
+    <tr><td>110 BPM</td><td>545.5ms</td><td>68.2ms</td><td>45.5ms</td><td>34.1ms</td></tr>
+    <tr><td>120 BPM</td><td>500.0ms</td><td>62.5ms</td><td>41.7ms</td><td>31.3ms</td></tr>
+    <tr><td>128 BPM</td><td>468.8ms</td><td>58.6ms</td><td>39.1ms</td><td>29.3ms</td></tr>
+    <tr><td>140 BPM</td><td>428.6ms</td><td>53.6ms</td><td>35.7ms</td><td>26.8ms</td></tr>
+    <tr><td>174 BPM</td><td>344.8ms</td><td>43.1ms</td><td>28.7ms</td><td>21.6ms</td></tr>
+  </tbody>
+</table></div>
+<p>A frame held for less than one refresh of the display — about 16.7ms on a 60Hz screen —
+will not be seen however exactly it is timed. Gifsync says so when any frame falls below
+it. <a href="bpm-frame-timing/">Work it out for any tempo and frame count.</a></p>
+
+<h2>Questions</h2>
+
+<h3>Does Gifsync upload my GIF or my song?</h3>
+<p>No. Both are decoded, retimed and encoded inside the page, and neither is ever sent
+anywhere. The page does fetch a tempo model the first time you ask it to listen to a song,
+and it counts page views with Google Analytics; neither of those carries anything about
+your files.</p>
+
+<h3>Is it free?</h3>
+<p>Yes. No account, no sign-in, no watermark, no limit on how many videos you make.</p>
+
+<h3>Why does it save an MP4 instead of a GIF?</h3>
+<p>A GIF cannot carry audio. The retimed animation could be written back out as a GIF, but
+then it would be silent, which defeats the point of syncing it to a song.</p>
+
+<h3>What if the tempo it guesses is wrong?</h3>
+<p>Type the right one into the tempo box, or press the tap button in time with the music
+and let it work the tempo out from that. You can also click the waveform wherever you hear
+a beat.</p>
+
+<h3>Can it keep the transparent background?</h3>
+<p>No. Transparency is flattened onto black, in the preview as well as in the render. No
+browser video encoder will keep an alpha channel in an MP4, so the choice is between a
+black background and a file most people cannot play.</p>
+
+<h3>Which browsers does it work in?</h3>
+<p>It needs WebCodecs, which means a recent Chrome, Edge or Safari. The page checks when it
+loads and says so if anything it needs is missing.</p>
+
+<h3>Where do the GIFs in the picker come from?</h3>
+<p>Wikimedia Commons, whose animated GIF category is around 31,000 files deep. Commons
+needs no API key, answers cross-origin, and states a licence for every file, so what you
+make from one is yours to post. The author and the licence stay on screen while you work.</p>
+
+</article>
 
 <footer>
   <span>Your GIF and song never leave your browser. Page views are counted with <a
