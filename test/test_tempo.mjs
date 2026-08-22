@@ -1,11 +1,11 @@
-// Checks the tempo front end in docs/index.html against docs/tempo_cases.json.
+// Checks the tempo front end in site/index.html against test/tempo_cases.json.
 //
 // The model only gives the right answer if it is fed the features it was trained on, and
 // those are essentia's TensorflowInputTempoCNN. The expected values were recorded from
 // essentia while it was still in the tree, so a change to the windowing, the FFT or the
 // mel filterbank fails here rather than quietly returning a plausible wrong tempo.
 //
-//   node docs/test_tempo.mjs
+//   node test/test_tempo.mjs
 
 import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-const page = readFileSync(join(here, "index.html"), "utf8");
+const page = readFileSync(join(here, "..", "site", "index.html"), "utf8");
 const start = page.indexOf("/* --- tempo:start");
 const end = page.indexOf("/* --- tempo:end");
 if (start < 0 || end < 0) throw new Error("tempo sentinels not found in index.html");

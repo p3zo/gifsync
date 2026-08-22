@@ -3,7 +3,7 @@ name: Deploy the beat marker to Pages
 on:
   push:
     branches: [main]
-    paths: ["docs/**", ".github/workflows/pages.yml"]
+    paths: ["site/**", "test/**", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
 permissions:
@@ -27,8 +27,8 @@ jobs:
       # Hold the retiming and the tempo front end to the values recorded alongside them,
       # rather than letting a deploy quietly change how frames are spaced or how the
       # tempo model is fed
-      - run: node docs/test_timing.mjs
-      - run: node docs/test_tempo.mjs
+      - run: node test/test_timing.mjs
+      - run: node test/test_tempo.mjs
 
   deploy:
     needs: check
@@ -41,6 +41,6 @@ jobs:
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: docs
+          path: site
       - id: deploy
         uses: actions/deploy-pages@v4
