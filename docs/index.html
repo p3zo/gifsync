@@ -223,7 +223,8 @@ details.more .row { margin-top: .6rem; }
         <line x1="6" y1="0" x2="6" y2="9" stroke="currentColor" stroke-width="2"/></svg>
         beats you marked in the song</span>
       <span><svg class="glyph g-grid" viewBox="0 0 12 18" aria-hidden="true">
-        <line x1="6" y1="18" x2="6" y2="7" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 3"/></svg>
+        <polygon points="1,18 11,18 6,11" fill="currentColor"/>
+        <line x1="6" y1="18" x2="6" y2="9" stroke="currentColor" stroke-width="2.5" stroke-dasharray="5 4"/></svg>
         where the gif's beat frames land</span>
       <span><svg class="glyph g-loop" viewBox="0 0 12 18" aria-hidden="true">
         <rect x="3" y="0" width="6" height="6" fill="currentColor"/>
@@ -854,7 +855,7 @@ function drawWave(playheadSeconds = null) {
   // Batched into paths because a fast setting puts a couple of thousand lines here.
   if (currentTiming) {
     const step = currentTiming.msPerBeat / 1000;
-    const grid = new Path2D(), loop = new Path2D(), loopCaps = new Path2D();
+    const grid = new Path2D(), gridCaps = new Path2D(), loop = new Path2D(), loopCaps = new Path2D();
     // The square caps only go on where there is room to tell them apart; packed tighter
     // than that they merge into a solid band and say less than the bare lines do.
     const caps = (step / duration) * w >= 5;
@@ -867,15 +868,25 @@ function drawWave(playheadSeconds = null) {
         loop.lineTo(x, h);
         if (caps) loopCaps.rect(x - 3, 0, 6, 6);
       } else {
-        grid.moveTo(x, h * 0.62);
+        grid.moveTo(x, h * 0.38);
         grid.lineTo(x, h);
+        if (caps) {
+          gridCaps.moveTo(x - 4, h);
+          gridCaps.lineTo(x + 4, h);
+          gridCaps.lineTo(x, h - 7);
+          gridCaps.closePath();
+        }
       }
     }
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([3, 3]);
+    // These are the marks the whole page is for — where the animation actually hits — so
+    // they stand up off the bottom with a flag on, rather than being a faint tick
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([5, 4]);
     ctx.strokeStyle = css.getPropertyValue("--grid");
     ctx.stroke(grid);
     ctx.setLineDash([]);
+    ctx.fillStyle = css.getPropertyValue("--grid");
+    ctx.fill(gridCaps);
     ctx.lineWidth = 1;
     ctx.strokeStyle = css.getPropertyValue("--loop");
     ctx.stroke(loop);
