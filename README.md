@@ -113,7 +113,8 @@ today. The Pages workflow runs both before deploying.
 - **A frame shorter than a display refresh will not read**, however exactly it is timed. The eased
   curves reach that first, since their shortest frames sit right at the beat; the page warns when
   any duration falls below it.
-- **Transparency is flattened onto a colour.** It cannot be kept: Chrome's `VideoEncoder` refuses
+- **Transparency is flattened onto black**, in the preview as well as the render. It cannot be
+  kept: Chrome's `VideoEncoder` refuses
   `alpha: "keep"` outright for every codec, so an alpha channel would mean a Firefox-only output in
   a WebM container.
 - **Finding the tempo needs the page served**, not opened off the filesystem, and a network
