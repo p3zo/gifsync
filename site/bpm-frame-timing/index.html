@@ -20,8 +20,8 @@
 <nav><a href="../">← Gifsync</a></nav>
 
 <h1>BPM to frame timing</h1>
-<p class="lead">How long one beat lasts at a given tempo, and how long to hold each frame of
-a GIF so that a whole number of frames fills it exactly.</p>
+<p class="lead">How long one beat lasts at a given tempo, and how long to hold each frame
+so a whole number of frames fills it exactly.</p>
 
 <div class="calc">
   <div class="row">
@@ -34,15 +34,14 @@ a GIF so that a whole number of frames fills it exactly.</p>
 <h2>Why this is not simply beat length divided by frames</h2>
 <p>It is, if you are writing the timing into a video. It is not, if you are writing it back
 into a GIF. The GIF format stores a delay per frame in <strong>hundredths of a
-second</strong>, so the only durations a GIF can express are 10ms, 20ms, 30ms and so on. At
-120 BPM over eight frames a beat wants 62.5ms a frame, and the nearest a GIF can hold is
-60ms or 70ms. Six-tenths of a frame is not much on its own; repeated every beat for the
-length of a song it is the difference between locked and visibly sliding.</p>
-<p>Short delays are worse. Most browsers refuse to honour a delay of one hundredth of a
-second and substitute a tenth instead, which is a factor of ten, so a fast loop written as
-10ms a frame plays at a tenth of the speed you asked for.</p>
-<p>This is why <a href="../">Gifsync</a> writes an MP4 rather than a GIF: frame timestamps
-in an MP4 are written to the microsecond, so the beats land where they were put.</p>
+second</strong>, so the only durations it can express are 10ms, 20ms, 30ms and so on. At 120
+BPM over eight frames a beat wants 62.5ms a frame, and the nearest a GIF can hold is 60ms.
+That loses 20ms on every beat, about a third of a frame, and 2.4 seconds over a minute.</p>
+<p>Short delays are worse. Most browsers refuse a delay of one hundredth of a second and
+substitute a tenth, so a fast loop written as 10ms a frame plays at a tenth of the speed you
+asked for.</p>
+<p>This is why <a href="../">Gifsync</a> writes an MP4. Frame timestamps in an MP4 are
+written to the microsecond, so the beats land where they were put.</p>
 
 <h2>One beat, and one frame of it</h2>
 <div class="scroll"><table>
@@ -65,16 +64,16 @@ in an MP4 are written to the microsecond, so the beats land where they were put.
     <tr><td>180 BPM</td><td>333.3ms</td><td>83.3ms</td><td>41.7ms</td><td>27.8ms</td><td>20.8ms</td></tr>
   </tbody>
 </table></div>
-<p>A frame held for less than one refresh of the display — about 16.7ms on a 60Hz screen —
-will not be seen however exactly it is timed. The rows near the bottom of that table are
-past the point where a viewer can tell one frame from the next.</p>
+<p>A frame held for less than one refresh of the display, about 16.7ms on a 60Hz screen,
+will not be seen however exactly it is timed. Nothing in the table is quite that short, but
+16 frames at 180 BPM comes close.</p>
 
-<h2>Going the other way: frames per beat from a frame count</h2>
+<h2>Going the other way: beats from a frame count</h2>
 <p>If the GIF is fixed and the question is how many beats its loop should cover, divide the
-frame count by the beats you want and check the answer is a whole number. Twenty frames
-over eight beats gives 2.5, which is not, so some beats hold three frames and others hold
-two — a 50% swing in speed, and quite visible. Twenty frames over ten beats gives two, and
-is even all the way round. Pick a beat count that divides the frame count.</p>
+frame count by the beats you want and check the answer is a whole number. Twenty frames over
+eight beats gives 2.5, so some beats hold three frames and others two, a 50% swing in speed
+that is quite visible. Twenty frames over ten beats gives two, even all the way round. Pick
+a beat count that divides the frame count.</p>
 
 <a class="cta" href="../">Line a GIF up with a song</a>
 

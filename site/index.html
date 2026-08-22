@@ -72,25 +72,25 @@
       "@type": "HowToStep",
       "position": 1,
       "name": "Drop in a GIF",
-      "text": "Drop in a GIF. Gifsync decodes it frame by frame and marks a first guess at which frames the beat should land on."
+      "text": "Drop in a GIF. Gifsync decodes it frame by frame and guesses which frames the beat should land on."
     },
     {
       "@type": "HowToStep",
       "position": 2,
       "name": "Drop in a song",
-      "text": "Drop in a song. It listens to the track, estimates the tempo, and marks the first few beats on the waveform to show you the pace it heard."
+      "text": "Drop in a song. It estimates the tempo and marks the first few beats on the waveform."
     },
     {
       "@type": "HowToStep",
       "position": 3,
       "name": "Check the marks",
-      "text": "Check the marks. Play the preview. Move a beat frame, retype the tempo, or tap along to the music if the estimate has it wrong."
+      "text": "Check the marks. Play the preview. Move a beat frame, retype the tempo, or tap along to the music."
     },
     {
       "@type": "HowToStep",
       "position": 4,
       "name": "Choose how often the GIF hits",
-      "text": "Choose how often the GIF hits. Once a beat by default; half time and double time are one dropdown away."
+      "text": "Choose how often the GIF hits. Once a beat by default. Half time and double time are one dropdown away."
     },
     {
       "@type": "HowToStep",
@@ -111,7 +111,7 @@
       "name": "Does Gifsync upload my GIF or my song?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "No. Both are decoded, retimed and encoded inside the page, and neither is ever sent anywhere. The page does fetch a tempo model the first time you ask it to listen to a song, and it counts page views with Google Analytics; neither of those carries anything about your files."
+        "text": "No. Both are decoded, retimed and encoded inside the page. It fetches a tempo model the first time you ask it to listen to a song, and counts page views with Google Analytics. Neither carries anything about your files."
       }
     },
     {
@@ -119,7 +119,7 @@
       "name": "Is it free?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Yes. No account, no sign-in, no watermark, no limit on how many videos you make."
+        "text": "Yes. No account, no watermark, no limit on how many videos you make."
       }
     },
     {
@@ -127,7 +127,7 @@
       "name": "Why does it save an MP4 instead of a GIF?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "A GIF cannot carry audio. The retimed animation could be written back out as a GIF, but then it would be silent, which defeats the point of syncing it to a song."
+        "text": "A GIF cannot carry audio. The retimed animation could be written back out as a GIF, but it would be silent."
       }
     },
     {
@@ -135,7 +135,7 @@
       "name": "What if the tempo it guesses is wrong?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Type the right one into the tempo box, or press the tap button in time with the music and let it work the tempo out from that. You can also click the waveform wherever you hear a beat."
+        "text": "Type the right one into the tempo box, or tap the button in time with the music and let it work the tempo out. You can also click the waveform wherever you hear a beat."
       }
     },
     {
@@ -143,7 +143,7 @@
       "name": "Can it keep the transparent background?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "No. Transparency is flattened onto black, in the preview as well as in the render. No browser video encoder will keep an alpha channel in an MP4, so the choice is between a black background and a file most people cannot play."
+        "text": "No. Transparency is flattened onto black, in the preview and in the render. No browser video encoder will keep an alpha channel in an MP4, so the choice is between a black background and a file most people cannot play."
       }
     },
     {
@@ -151,7 +151,7 @@
       "name": "Which browsers does it work in?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "It needs WebCodecs, which means a recent Chrome, Edge or Safari. The page checks when it loads and says so if anything it needs is missing."
+        "text": "It needs WebCodecs, so a recent Chrome, Edge or Safari. The page checks on load and says so if anything is missing."
       }
     },
     {
@@ -159,7 +159,7 @@
       "name": "Where do the GIFs in the picker come from?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Wikimedia Commons, whose animated GIF category is around 31,000 files deep. Commons needs no API key, answers cross-origin, and states a licence for every file, so what you make from one is yours to post. The author and the licence stay on screen while you work."
+        "text": "Wikimedia Commons, whose animated GIF category is around 31,000 files deep. It needs no API key, answers cross-origin, and states a licence for every file, so what you make is yours to post. The author and licence stay on screen while you work."
       }
     }
   ]
@@ -597,13 +597,13 @@ details.more .row { margin-top: .6rem; }
 
 <h2>How to sync a GIF to a song</h2>
 <ol>
-  <li><strong>Drop in a GIF.</strong> Gifsync decodes it frame by frame and marks a first
-    guess at which frames the beat should land on.</li>
-  <li><strong>Drop in a song.</strong> It listens to the track, estimates the tempo, and
-    marks the first few beats on the waveform to show you the pace it heard.</li>
+  <li><strong>Drop in a GIF.</strong> Gifsync decodes it frame by frame and guesses which
+    frames the beat should land on.</li>
+  <li><strong>Drop in a song.</strong> It estimates the tempo and marks the first few beats
+    on the waveform.</li>
   <li><strong>Check the marks.</strong> Play the preview. Move a beat frame, retype the
-    tempo, or tap along to the music if the estimate has it wrong.</li>
-  <li><strong>Choose how often the GIF hits.</strong> Once a beat by default; half time and
+    tempo, or tap along to the music.</li>
+  <li><strong>Choose how often the GIF hits.</strong> Once a beat by default. Half time and
     double time are one dropdown away.</li>
   <li><strong>Make the video.</strong> You get an MP4 of the retimed animation with the
     song in it, looped to the length of the audio.</li>
@@ -673,36 +673,34 @@ it. <a href="bpm-frame-timing/">Work it out for any tempo and frame count.</a></
 <h2>Questions</h2>
 
 <h3>Does Gifsync upload my GIF or my song?</h3>
-<p>No. Both are decoded, retimed and encoded inside the page, and neither is ever sent
-anywhere. The page does fetch a tempo model the first time you ask it to listen to a song,
-and it counts page views with Google Analytics; neither of those carries anything about
-your files.</p>
+<p>No. Both are decoded, retimed and encoded inside the page. It fetches a tempo model the
+first time you ask it to listen to a song, and counts page views with Google Analytics.
+Neither carries anything about your files.</p>
 
 <h3>Is it free?</h3>
-<p>Yes. No account, no sign-in, no watermark, no limit on how many videos you make.</p>
+<p>Yes. No account, no watermark, no limit on how many videos you make.</p>
 
 <h3>Why does it save an MP4 instead of a GIF?</h3>
 <p>A GIF cannot carry audio. The retimed animation could be written back out as a GIF, but
-then it would be silent, which defeats the point of syncing it to a song.</p>
+it would be silent.</p>
 
 <h3>What if the tempo it guesses is wrong?</h3>
-<p>Type the right one into the tempo box, or press the tap button in time with the music
-and let it work the tempo out from that. You can also click the waveform wherever you hear
-a beat.</p>
+<p>Type the right one into the tempo box, or tap the button in time with the music and let
+it work the tempo out. You can also click the waveform wherever you hear a beat.</p>
 
 <h3>Can it keep the transparent background?</h3>
-<p>No. Transparency is flattened onto black, in the preview as well as in the render. No
-browser video encoder will keep an alpha channel in an MP4, so the choice is between a
-black background and a file most people cannot play.</p>
+<p>No. Transparency is flattened onto black, in the preview and in the render. No browser
+video encoder will keep an alpha channel in an MP4, so the choice is between a black
+background and a file most people cannot play.</p>
 
 <h3>Which browsers does it work in?</h3>
-<p>It needs WebCodecs, which means a recent Chrome, Edge or Safari. The page checks when it
-loads and says so if anything it needs is missing.</p>
+<p>It needs WebCodecs, so a recent Chrome, Edge or Safari. The page checks on load and says
+so if anything is missing.</p>
 
 <h3>Where do the GIFs in the picker come from?</h3>
-<p>Wikimedia Commons, whose animated GIF category is around 31,000 files deep. Commons
-needs no API key, answers cross-origin, and states a licence for every file, so what you
-make from one is yours to post. The author and the licence stay on screen while you work.</p>
+<p>Wikimedia Commons, whose animated GIF category is around 31,000 files deep. It needs no
+API key, answers cross-origin, and states a licence for every file, so what you make is
+yours to post. The author and licence stay on screen while you work.</p>
 
 </article>
 
