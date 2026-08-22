@@ -86,11 +86,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--audio_filepath",
         type=str,
+        required=True,
         help="The path to the audio file.",
     )
     parser.add_argument(
         "--gif_filepath",
         type=str,
+        required=True,
         help="The path to the gif.",
     )
     parser.add_argument(
@@ -101,6 +103,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--beat_frames",
         nargs="+",
+        type=int,
+        required=True,
         help="The indices (zero-indexed) of the GIF frames to align with the beat.",
     )
     parser.add_argument(
@@ -130,7 +134,7 @@ if __name__ == "__main__":
     audio_11khz = es.MonoLoader(filename=audio_filepath, sampleRate=11025)()
 
     global_bpm = args.bpm
-    if not global_bpm:
+    if global_bpm is None:
         global_bpm, local_bpm, local_probs = es.TempoCNN(
             graphFilename="tempocnn/deeptemp-k16-3.pb"
         )(audio_11khz)
@@ -139,6 +143,14 @@ if __name__ == "__main__":
             raise RuntimeError(f"Could not estimate BPM from {audio_filepath}.")
 
         print(f"Estimated BPM: {global_bpm}")
+
+    if global_bpm <= 0:
+        raise ValueError(f"BPM must be positive, got {global_bpm}.")
+
+    if args.tempo_multiplier <= 0:
+        raise ValueError(
+            f"Tempo multiplier must be positive, got {args.tempo_multiplier}."
+        )
 
     beats_per_second = global_bpm / 60
     beats_per_second *= args.tempo_multiplier
@@ -150,7 +162,7 @@ if __name__ == "__main__":
     gif_filepath = args.gif_filepath
     im = Image.open(gif_filepath)
 
-    beat_frames = [int(i) for i in args.beat_frames]
+    beat_frames = args.beat_frames
 
     # Get output frame durations in ms
     durations = get_durations(
@@ -184,6 +196,7 @@ if __name__ == "__main__":
                 fh.write(f"duration {durations[ix]}ms\n")
 
     audio_name = os.path.splitext(os.path.basename(audio_filepath))[0]
+    os.makedirs(args.output_directory, exist_ok=True)
     output_filepath = os.path.join(
         args.output_directory, f"{audio_name}_{gif_name}.mp4"
     )
