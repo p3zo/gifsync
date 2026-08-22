@@ -1,4 +1,5 @@
 import argparse
+import math
 import os
 import subprocess
 
@@ -7,6 +8,10 @@ import numpy as np
 from PIL import Image
 
 from easing import CubicEaseInOut, LinearInOut, QuadEaseInOut
+
+# ffmpeg's concat demuxer gives a stream of images a 1/25 timebase, so it rounds every
+# frame duration onto a 40ms grid no matter what the list asks for.
+CONCAT_TIMEBASE_MS = 40
 
 
 def get_durations(beat_frames, ms_per_beat, n_frames, interpolation="linear"):
@@ -51,9 +56,11 @@ def get_durations(beat_frames, ms_per_beat, n_frames, interpolation="linear"):
         times = list(map(lerp, x))
         durations.extend([i - j for i, j in zip(times[1:], times)])
 
-    if any([i < 2 for i in durations]):
+    if any([i < CONCAT_TIMEBASE_MS for i in durations]):
         print(
-            "WARNING: Durations less than 2ms are not processed well by ffmpeg (TODO: source?).\nTry using fewer beat frames or a different interpolation method."
+            f"WARNING: ffmpeg rounds frame durations onto a {CONCAT_TIMEBASE_MS}ms grid, and some of these "
+            "are shorter than that,\nso the motion will not land where the interpolation puts it. "
+            "Try using fewer beat frames\nor a different interpolation method."
         )
 
     return durations
@@ -157,7 +164,6 @@ if __name__ == "__main__":
         os.mkdir(tmpdir)
 
     tmp_txt = os.path.join(tmpdir, "input.txt")
-    tmp_vid = os.path.join(tmpdir, "tmp.mov")
 
     for frame in range(im.n_frames):
         print(f"Saving frame {frame}")
@@ -166,12 +172,24 @@ if __name__ == "__main__":
 
     frame_order = get_frame_order(beat_frames[0], im.n_frames)
 
-    with open(tmp_txt, "w") as fh:
-        for ix, frame in enumerate(frame_order):
-            fh.write(f"file '{frame}.png'\n")
-            fh.write(f"duration {durations[ix]}ms\n")
+    # Repeat the frame list itself rather than looping the encoded video with -stream_loop,
+    # which does not restart cleanly on the beat and slips a little further at every seam.
+    audio_ms = len(audio_11khz) / 11025 * 1000
+    n_loops = math.ceil(audio_ms / (len(beat_frames) * ms_per_beat))
 
-    # Stitch the images together into a video
+    with open(tmp_txt, "w") as fh:
+        for _ in range(n_loops):
+            for ix, frame in enumerate(frame_order):
+                fh.write(f"file '{frame}.png'\n")
+                fh.write(f"duration {durations[ix]}ms\n")
+
+    audio_name = os.path.splitext(os.path.basename(audio_filepath))[0]
+    output_filepath = os.path.join(
+        args.output_directory, f"{audio_name}_{gif_name}.mp4"
+    )
+
+    # Stitch the frames together and add the audio, trimming the extra loop off the end.
+    # -fps_mode passthrough keeps every frame; -vsync vfr drops the short ones outright.
     # TODO: preserve transparency channels of input PNGs when concatenating
     subprocess.check_call(
         [
@@ -180,32 +198,12 @@ if __name__ == "__main__":
             "concat",
             "-i",
             tmp_txt,
-            "-vsync",
-            "vfr",
-            "-pix_fmt",
-            "yuv420p",
-            "-y",
-            tmp_vid,
-        ]
-    )
-
-    audio_name = os.path.splitext(os.path.basename(audio_filepath))[0]
-    output_filepath = os.path.join(
-        args.output_directory, f"{audio_name}_{gif_name}.mp4"
-    )
-
-    # Add audio and loop the video to the length of the audio
-    subprocess.check_call(
-        [
-            "ffmpeg",
-            "-stream_loop",
-            "-1",
-            "-i",
-            tmp_vid,
             "-i",
             audio_filepath,
-            "-c:v",
-            "copy",
+            "-fps_mode",
+            "passthrough",
+            "-pix_fmt",
+            "yuv420p",
             "-shortest",
             "-map",
             "0:v:0",
