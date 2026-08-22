@@ -21,23 +21,28 @@ x [Epik High - 낙화 (落花) {The Falling Flower}](https://www.youtube.com/wat
 
 ## Usage
 
-The page walks through four steps, and a step that is not ready yet says what is missing rather
-than sitting there greyed out. **Try an example** fills all of it in with a bouncing ball and a
-120bpm loop, both generated for the job, if you would rather see it working before supplying your
-own.
+Drop in a GIF and a song and the page does the first pass itself: beat frames are suggested on the
+animation as soon as it decodes, and the song's tempo and the first few of its beats are worked out
+as soon as it does. Everything after that is correcting what it got wrong. **Try an example** loads
+a bouncing ball and a 120bpm loop, both generated for the job, if you would rather see it working
+before supplying your own.
 
-Drop a GIF in and step through the frames, marking the ones the beat should land on; the marked
-frames appear in their own row, in the order the beat will hit them. **Suggest beat frames** puts a
-first set down for you — say how many beats one loop of the animation should last and it places
-that many marks, which you then correct. Drop a song in and click its
-beats on the waveform, or tap them in with `B` while it plays: the first is the downbeat the
-animation starts from, and two or more give the tempo. `Find the tempo` reads it off the audio
-instead. Both kinds of mark have an undo.
+The two files sit down the left; lining them up is the work, and takes the middle of the page. A
+step that is not ready yet says what is missing rather than sitting there greyed out, and the
+fiddly controls stay folded away until you go looking for them.
 
-The waveform then shows where every beat frame will land and where the animation loops, and the
-preview plays the two together. Changing the tempo while it is playing re-times the animation and
-the click track underneath it, so you can nudge it until it locks. Then make the video: it plays
-on the page, with a button to download it.
+The waveform shows the song's beats, where every beat frame of the animation will land, and where
+the animation loops. The preview plays the two together, round and round from the downbeat.
+Changing the tempo while it is playing re-times the animation and the click track underneath it, so
+you can nudge it until it locks. Then make the video: it plays on the page, with a button to
+download it.
+
+To correct the beat frames: **Suggest beat frames** re-runs the suggestion at whatever count you
+ask for, or step through with the arrow keys and mark frames with space, or press **Play the GIF**
+and hit space on the accents as they go past — slow it down first if they go by too quickly. To
+correct the song: drag the tempo, tap it in, click beats onto the waveform, or tap them with `B`
+while the preview plays. The first beat mark is the downbeat the animation starts from. Both kinds
+of mark have an undo.
 
 **Tempo (BPM)** is the song's tempo. **The GIF hits** is a separate thing: how often the GIF lands
 against that tempo, so `twice a beat` runs the animation at double speed without pretending the song
@@ -66,6 +71,11 @@ Spreading a 500ms beat over eight frames:
    frame lands on the song's downbeat and every later beat frame lands on a beat too.
 5. `VideoEncoder` and `AudioEncoder` encode the frames and the audio, and the page muxes them into
    an mp4 itself. Frame timestamps are written to the microsecond, so the beats land exactly.
+
+The song's beats are placed by taking the tempo from the model and then sliding that grid across an
+envelope of the attacks, leaving it wherever it catches the most. One envelope frame is 5.8ms. Shift
+a track by a known amount and the answer shifts with it to within about 10ms, on all three of the
+songs here.
 
 Suggested beat frames are an even spread around the loop starting at frame 0, with each mark nudged
 onto whichever of its two neighbouring frames changes most. That is a duller idea than it sounds
