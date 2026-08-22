@@ -275,6 +275,9 @@ function wireDrop(dropId, inputId, onFile) {
 }
 
 async function loadGif(file) {
+  // A playing source keeps the buffer and frames it started with, so it would carry on
+  // against a page that has already moved to the new file
+  stopPlayback();
   $("gifDrop").textContent = `Decoding ${file.name}…`;
 
   const decoder = new ImageDecoder({ data: await file.arrayBuffer(), type: "image/gif" });
@@ -373,6 +376,9 @@ addEventListener("keydown", (e) => {
 const actx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
 
 async function loadAudio(file) {
+  stopPlayback();
+  // the previous song's tempo estimate does not describe this one
+  $("estimateNote").textContent = "";
   $("audioDrop").textContent = `Decoding ${file.name}…`;
 
   const bytes = await file.arrayBuffer();
