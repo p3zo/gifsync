@@ -40,8 +40,8 @@ downloads go — you already have something better than this page for watching i
 notices and anything that went wrong appear as messages in the bottom corner rather than each
 holding a strip of the page open.
 
-To correct the beat frames: **Suggest beat frames** re-runs the suggestion at whatever count you
-ask for, or step through with the arrow keys and mark frames with space, or press **Play the GIF**
+To correct the beat frames: **Suggest beat frames** places a fresh set (how many it places is a
+setting under *Change them by hand*), or step through with the arrow keys and mark frames with space, or press **Play the GIF**
 and hit space on the accents as they go past — slow it down first if they go by too quickly. To
 correct the song: drag the tempo, tap it in, click beats onto the waveform, or tap them with `B`
 while the preview plays. The first beat mark is the downbeat the animation starts from. Both kinds
@@ -51,7 +51,7 @@ of mark have an undo.
 against that tempo, so `twice a beat` runs the animation at double speed without pretending the song
 is faster than it is.
 
-**Between beats**, under *More options*, distributes each beat across the frames between two marks,
+**Between beats**, under *More controls*, distributes each beat across the frames between two marks,
 and changes the character of the movement more than you would expect. `even` gives every frame the
 same duration, so the animation moves at a constant speed and only its landmarks are on the beat.
 The two `ease in and out` settings hold the frames midway between beats and flash through the ones
@@ -129,14 +129,15 @@ today. The Pages workflow runs both before deploying.
 ## Limitations
 
 - **How many beats a loop should last is your call.** Nothing in the pixels settles it, and the two
-  hand-labelled GIFs here were deliberately run slower and faster than their own frame rate, so
-  *Suggest beat frames* asks for the count rather than guessing it.
+  hand-labelled GIFs here were deliberately run slower and faster than their own frame rate. Eight
+  is the starting guess, and the count is a setting rather than something you are asked for up
+  front, since there is no way to know it before seeing the animation against the song.
 - **Deriving tempo from beat marks assumes they are consecutive beats.** Mark every bar instead and
   the tempo comes out too slow by that factor.
 - **A frame shorter than a display refresh will not read**, however exactly it is timed. The eased
   curves reach that first, since their shortest frames sit right at the beat; the page warns when
   any duration falls below it.
-- **Transparency is flattened onto a colour**, black unless you pick another under *More options*,
+- **Transparency is flattened onto a colour**, black unless you pick another under *More controls*,
   and the preview shows the same one. It cannot be kept: Chrome's `VideoEncoder` refuses
   `alpha: "keep"` outright for every codec, so an alpha channel would mean a Firefox-only output in
   a WebM container.
