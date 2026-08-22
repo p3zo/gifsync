@@ -27,7 +27,9 @@ than sitting there greyed out. **Try an example** fills all of it in with a boun
 own.
 
 Drop a GIF in and step through the frames, marking the ones the beat should land on; the marked
-frames appear in their own row, in the order the beat will hit them. Drop a song in and click its
+frames appear in their own row, in the order the beat will hit them. **Suggest beat frames** puts a
+first set down for you — say how many beats one loop of the animation should last and it places
+that many marks, which you then correct. Drop a song in and click its
 beats on the waveform, or tap them in with `B` while it plays: the first is the downbeat the
 animation starts from, and two or more give the tempo. `Find the tempo` reads it off the audio
 instead. Both kinds of mark have an undo.
@@ -65,6 +67,14 @@ Spreading a 500ms beat over eight frames:
 5. `VideoEncoder` and `AudioEncoder` encode the frames and the audio, and the page muxes them into
    an mp4 itself. Frame timestamps are written to the microsecond, so the beats land exactly.
 
+Suggested beat frames are an even spread around the loop starting at frame 0, with each mark nudged
+onto whichever of its two neighbouring frames changes most. That is a duller idea than it sounds
+like it should be, and it is what the evidence supported: neither dance GIF here repeats at its
+accent period, so nothing periodic in the pixels finds the accents, and of two dozen candidate
+signals only the one-frame nudge beat the plain even spread without ever making it worse. Against
+the hand labels it comes out 0.40 and 0.50 frames off, where marks thrown down at random score
+about 3.
+
 Tempo estimation runs the [TempoCNN](https://essentia.upf.edu/models.html#tempocnn) model in
 `docs/tempocnn/` through TensorFlow.js. Its front end — 11025Hz mono, 1024-sample frames every 512,
 Hann, magnitude spectrum, 40 Slaney mel bands over 20-5000Hz with unit-triangle normalisation — was
@@ -84,9 +94,9 @@ today. The Pages workflow runs both before deploying.
 
 ## Limitations
 
-- **Beat frames are marked by hand.** Which frame of an animation reads as its accent is a
-  judgement about the motion, and nothing here makes it for you. See
-  [#4](https://github.com/p3zo/gifsync/issues/4).
+- **How many beats a loop should last is your call.** Nothing in the pixels settles it, and the two
+  hand-labelled GIFs here were deliberately run slower and faster than their own frame rate, so
+  *Suggest beat frames* asks for the count rather than guessing it.
 - **Deriving tempo from beat marks assumes they are consecutive beats.** Mark every bar instead and
   the tempo comes out too slow by that factor.
 - **A frame shorter than a display refresh will not read**, however exactly it is timed. The eased
