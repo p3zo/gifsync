@@ -1,15 +1,18 @@
-# GIF Sync
+# Gifsync
 
-Reassembles the frames of a GIF to sync its animation to the beat of an audio file.
+Gifsync is a free browser tool that retimes a GIF so its animation lands on the beat of a song, and
+saves the result as an MP4 with the audio in it. Nothing is uploaded: the decoding, the retiming and
+the encoding all happen in the page. **<https://p3zo.github.io/gifsync/>**
 
-A GIF stores a duration per frame, so nothing has to be added or dropped to retime one. The frames
-just get held for different lengths. Mark the frames the beat should land on, mark the beats of the
+Most tools that offer to add music to a GIF lay an audio track underneath and leave the animation
+alone, so the loop slides out of time with the song. This one changes the animation instead. A GIF
+stores a duration per frame, so nothing has to be added or dropped to retime one. The frames just
+get held for different lengths. Mark the frames the beat should land on, mark the beats of the
 song, and the animation is stretched so the two line up. The output is an mp4 of the retimed
 animation with the audio muxed in, looped to the length of the audio.
 
-It runs in the browser: **<https://p3zo.github.io/gifsync/>**, or open
-[site/index.html](site/index.html) off disk. The page explains how to use it. This file is about how
-it works.
+The page itself explains how to use it, and also runs from
+[site/index.html](site/index.html) off disk. This file is about how it works.
 
 ## How it works
 
@@ -64,6 +67,10 @@ pull the retiming and the tempo front end out of the page and check them against
 `test/timing_cases.json` and `test/tempo_cases.json`. Both fixtures were recorded from the Python
 this tool replaced, so the page stays pinned to what that produced rather than to whatever it does
 today. The Pages workflow runs both before deploying.
+
+The link preview card and video in `site/media/` are rendered by the page itself, and the bundled
+example GIF is drawn from scratch. `tools/make-media.mjs` and `tools/make-example-gif.mjs` each say
+at the top of the file how to run them.
 
 ## Limitations
 

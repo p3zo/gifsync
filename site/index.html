@@ -3,7 +3,47 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Gifsync - Sync GIFs to music</title>
+<title>Gifsync — sync a GIF to the beat of a song</title>
+<meta name="description" content="Free browser tool that retimes a GIF's frames so its animation lands on the beat of any song, then saves an MP4. Nothing is uploaded, no account, no watermark.">
+<link rel="canonical" href="https://p3zo.github.io/gifsync/">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Gifsync">
+<meta property="og:url" content="https://p3zo.github.io/gifsync/">
+<meta property="og:title" content="Gifsync — sync a GIF to the beat of a song">
+<meta property="og:description" content="Drop in a GIF and a song. Gifsync finds the beats in both, retimes the animation onto them, and saves an MP4. Free, and nothing leaves your browser.">
+<meta property="og:image" content="https://p3zo.github.io/gifsync/media/social-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A GIF frame beside a song's waveform, marked where each beat falls">
+<meta property="og:video" content="https://p3zo.github.io/gifsync/media/demo.mp4">
+<meta property="og:video:type" content="video/mp4">
+<meta property="og:video:width" content="384">
+<meta property="og:video:height" content="384">
+<meta name="twitter:card" content="summary_large_image">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Gifsync",
+  "url": "https://p3zo.github.io/gifsync/",
+  "applicationCategory": "MultimediaApplication",
+  "operatingSystem": "Any browser with WebCodecs (Chrome, Edge, Safari)",
+  "description": "Retimes a GIF's frames so its animation lands on the beat of a song, and saves the result as an MP4. Runs entirely in the browser: the GIF and the song are never uploaded.",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "featureList": [
+    "Estimates the tempo of the song for you",
+    "Suggests which GIF frames the beat should land on",
+    "Eases the animation between beats so the motion snaps on the beat",
+    "Exports an MP4 with the audio muxed in",
+    "No upload, no account, no watermark"
+  ],
+  "author": { "@type": "Person", "name": "Patricio Ovalle", "url": "https://p3zo.github.io/" },
+  "codeRepository": "https://github.com/p3zo/gifsync"
+}
+</script>
 
 <!-- Page views only. Nothing about the gif or the song is measured or sent anywhere: both
      are decoded, retimed and encoded in this tab and never leave it. Off a file:// url
@@ -45,7 +85,6 @@ body {
 }
 header { max-width: 78rem; margin: 0 auto; padding: 1.25rem 0 .75rem; }
 h1 { font-size: 1.3rem; margin: 0 0 .4rem; letter-spacing: -.01em; }
-#intro { margin: 0; max-width: 46rem; color: var(--dim); font-size: .925rem; }
 footer {
   max-width: 78rem; margin: 2rem auto 0; padding-top: .9rem; border-top: 1px solid var(--line);
   display: grid; justify-items: start; gap: .5rem; font-size: .8rem; color: var(--dim);
@@ -176,7 +215,6 @@ input[type=color] { width: 2.4rem; height: 1.7rem; padding: 1px; border: 1px sol
 }
 #log:empty::before { content: "Nothing yet."; color: var(--dim); }
 .make { justify-content: flex-end; }
-.hits { margin-top: .9rem; }
 /* the legend is already a dense line of small text; the fold needs air under it */
 
 #gifCredit { margin-top: .6rem; }
@@ -220,6 +258,19 @@ input[type=color] { width: 2.4rem; height: 1.7rem; padding: 1px; border: 1px sol
   background: var(--panel); color: var(--dim); font-size: .75rem;
 }
 
+/* The reading matter under the tool. It is not part of using the thing, so it takes the
+   width of a column of text rather than the width of the page. */
+/* the same width as main, so the reading column starts where the tool does */
+.prose { max-width: 78rem; margin: 2.75rem auto 0; }
+.prose > * { max-width: 46rem; }
+.prose h2 { display: block; font-size: 1.05rem; margin: 2rem 0 .6rem; }
+.prose p, .prose li { color: var(--dim); font-size: .925rem; }
+.prose p { margin: 0 0 .8rem; }
+.prose ol, .prose ul { margin: 0 0 .8rem; padding-left: 1.25rem; }
+.prose li { margin-bottom: .35rem; }
+.prose strong { color: var(--ink); font-weight: 600; }
+.prose a { color: var(--ink); }
+
 /* Anything transient goes to the same corner, so no part of the page has to keep room
    free for a message that is usually not there. */
 #toasts {
@@ -247,9 +298,7 @@ details.more .row { margin-top: .6rem; }
 <body>
 
 <header>
-  <h1>Gifsync - Sync GIFs to music</h1>
-  <p id="intro">Drop in a GIF and a song. Gifsync picks out the beats in both and lines them up
-  for you. Play it back, change anything that looks or sounds off, then save the video.</p>
+  <h1>Gifsync — sync a GIF to the beat of a song</h1>
 </header>
 
 <main>
@@ -356,6 +405,17 @@ details.more .row { margin-top: .6rem; }
           <button id="clearBeatsBtn">Clear all beats</button>
         </div>
         <div class="row">
+          <label>The GIF hits
+            <select id="hits">
+              <option value="0.25">every 4 beats</option>
+              <option value="0.5">every 2 beats</option>
+              <option value="1" selected>every beat</option>
+              <option value="2">twice a beat</option>
+              <option value="4">four times a beat</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
           <label>Between beats
             <select id="interpolation">
               <option value="linear">even</option>
@@ -385,20 +445,8 @@ details.more .row { margin-top: .6rem; }
     </div>
   </div>
 
-  <div class="row hits">
-    <label>The GIF hits
-      <select id="hits">
-        <option value="0.25">every 4 beats</option>
-        <option value="0.5">every 2 beats</option>
-        <option value="1" selected>every beat</option>
-        <option value="2">twice a beat</option>
-        <option value="4">four times a beat</option>
-      </select>
-    </label>
-  </div>
-
   <div class="row make">
-    <button id="renderBrowserBtn" class="primary">Make the video</button>
+    <button id="renderBrowserBtn" class="primary">Save the video</button>
   </div>
   </div>
 </section>
@@ -412,11 +460,27 @@ details.more .row { margin-top: .6rem; }
 
 </main>
 
+<article class="prose">
+
+<h2>How to use it</h2>
+<ol>
+  <li><strong>Drop in a GIF.</strong> Gifsync predicts the frames the beat should land
+    on.</li>
+  <li><strong>Drop in a song.</strong> Gifsync estimates the tempo and marks the first few
+    beats.</li>
+  <li><strong>Make adjustments.</strong> Move the marks, type the tempo, or tap it out. Set
+    how often the GIF hits, and what happens between beats.</li>
+  <li><strong>Save the video.</strong></li>
+</ol>
+
+</article>
+
 <footer>
   <span>Your GIF and song never leave your browser. Page views are counted with <a
     href="https://policies.google.com/technologies/partner-sites" target="_blank"
     rel="noopener">Google Analytics</a>, which sets cookies.</span>
   <div class="links">
+    <a href="bpm-frame-timing/">Frame timing calculator</a>
     <a href="https://github.com/p3zo/gifsync" target="_blank" rel="noopener">View source on GitHub</a>
     <a href="https://ko-fi.com/patricio_" target="_blank" rel="noopener">Support the developer</a>
   </div>
@@ -1019,11 +1083,11 @@ $("pickerQuery").onkeydown = (e) => {
 
 // A page that fills itself in is the quickest way to see what any of this does. Both
 // files were generated for the job, so there is nothing to license: the ball hits the
-// ground on frames 0 and 8, and the loop is four to the floor at 120bpm.
+// ground on frames 0 and 16, and the loop is four to the floor at 120bpm.
 const EXAMPLE = {
   gif: "example/bouncing-ball.gif",
   audio: "example/four-on-the-floor.mp3",
-  gifBeats: [0, 8],
+  gifBeats: [0, 16],
   songBeats: [0, 0.5, 1, 1.5],
   bpm: "120",
 };
@@ -1192,6 +1256,28 @@ function drawWave(playheadSeconds = null) {
     ctx.fill(grid);
     ctx.fillStyle = css.getPropertyValue("--loop");
     ctx.fill(loop);
+  }
+
+  // The song's own pulse, all the way along. Only the first few beats are ever marked, and
+  // a row of lines that stopped two seconds in read as though the estimate had given up.
+  // This is the song's beat, so it is 60/bpm, not the gif's hit rate.
+  const bpm = parseFloat($("bpm").value);
+  const beatSeconds = bpm > 0 ? 60 / bpm : 0;
+  if (beatSeconds && (beatSeconds / duration) * w >= 3) {
+    const pulse = new Path2D();
+    // from the downbeat's phase, so the grid covers the song ahead of the first mark too
+    for (let t = downbeat() % beatSeconds; t < duration; t += beatSeconds) {
+      const x = at(t);
+      pulse.moveTo(x, 0);
+      pulse.lineTo(x, h);
+    }
+    ctx.save();
+    // faint, because the marks a person placed have to stay the louder of the two
+    ctx.globalAlpha = 0.3;
+    ctx.strokeStyle = css.getPropertyValue("--accent");
+    ctx.lineWidth = 1;
+    ctx.stroke(pulse);
+    ctx.restore();
   }
 
   const beatLines = new Path2D();
@@ -1729,7 +1815,7 @@ async function estimateSong({ keepExistingBeats }) {
       beatsAreEstimates = true;
     }
 
-    $("estimateNote").innerHTML = `Sounds like <b>${bpm} BPM</b>.` +
+    $("estimateNote").innerHTML = `Estimated <b>${bpm} BPM</b>.` +
       // the model always names a tempo; when the vote is this split it is often the wrong one
       (confidence < 0.5 ? ` <span class="warn">It is not sure though, so play it back and check.</span>` : "");
     refresh();
