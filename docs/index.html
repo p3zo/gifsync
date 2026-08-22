@@ -138,6 +138,41 @@ input[type=color] { width: 2.4rem; height: 1.7rem; padding: 1px; border: 1px sol
 #log:empty::before { content: "Nothing yet."; color: var(--dim); }
 .make { justify-content: flex-end; }
 
+#gifCredit { margin-top: .6rem; }
+#gifCredit:empty { display: none; }
+#gifCredit a { color: inherit; }
+
+#picker {
+  width: min(60rem, 92vw); max-height: 86vh; padding: 1rem; border: 1px solid var(--line);
+  border-radius: 12px; background: var(--panel); color: var(--ink);
+}
+#picker::backdrop { background: rgb(0 0 0 / .5); }
+.pickerhead { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: .6rem; }
+.pickerhead strong { font-size: .95rem; }
+#pickerQuery {
+  flex: 1; min-width: 12rem; font: inherit; font-size: .875rem; padding: .35rem .5rem;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink);
+}
+#pickerGrid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: .6rem;
+  max-height: 62vh; overflow-y: auto; padding-top: .3rem;
+}
+#pickerGrid button {
+  display: block; width: 100%; padding: .35rem; text-align: left; line-height: 1.35;
+  background: var(--bg); border-radius: 8px;
+}
+#pickerGrid img {
+  display: block; width: 100%; height: 8rem; object-fit: contain; border-radius: 5px;
+  background: repeating-conic-gradient(var(--line) 0 25%, transparent 0 50%) 0 0/12px 12px;
+}
+.pickname { display: block; font-size: .78rem; margin-top: .3rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pickmeta { display: block; font-size: .7rem; color: var(--dim); }
+.pickmissing {
+  display: grid; place-items: center; height: 8rem; border-radius: 5px;
+  background: var(--panel); color: var(--dim); font-size: .75rem;
+}
+
 /* Anything transient goes to the same corner, so no part of the page has to keep room
    free for a message that is usually not there. */
 #toasts {
@@ -185,6 +220,10 @@ details.more .row { margin-top: .6rem; }
   <div class="body">
   <div class="drop" id="gifDrop">Drop a GIF here, or click to choose one</div>
   <input type="file" id="gifInput" accept="image/gif" hidden>
+  <div class="row">
+    <button id="browseBtn">Browse GIFs</button>
+  </div>
+  <div class="say" id="gifCredit"></div>
   <div id="gifBody" hidden>
     <div class="row">
       <button id="suggestBtn">Suggest beat frames</button>
@@ -325,6 +364,17 @@ details.more .row { margin-top: .6rem; }
 
 </main>
 
+<dialog id="picker">
+  <div class="pickerhead">
+    <strong>Animated GIFs on Wikimedia Commons</strong>
+    <input type="search" id="pickerQuery" placeholder="Search, or leave empty to browse">
+    <button id="pickerSearch" class="primary">Search</button>
+    <button id="pickerClose">Close</button>
+  </div>
+  <div class="say" id="pickerNote"></div>
+  <div id="pickerGrid"></div>
+</dialog>
+
 <div id="toasts" aria-live="polite"></div>
 
 <script type="module">
@@ -400,7 +450,7 @@ function remember(history, snapshot) {
 }
 
 const state = {
-  gifFile: null, frames: [], holds: [], width: 0, height: 0, cur: 0, beats: new Set(),
+  gifFile: null, frames: [], holds: [], width: 0, height: 0, cur: 0, beats: new Set(), credit: null,
   audioFile: null, audioBuffer: null, audioBeats: [], peaks: null,
 };
 
@@ -481,6 +531,7 @@ async function loadGif(file) {
   state.height = frames[0].height;
   state.cur = 0;
   state.beats = new Set();
+  state.credit = null;
   markHistory.length = 0;
 
   $("gifDrop").textContent = `${file.name} — ${count} frames, ${state.width}×${state.height}. Drop another to replace.`;
@@ -733,6 +784,144 @@ addEventListener("keydown", (e) => {
   else if (e.key === " ") { toggleMark(); e.preventDefault(); }
   else if (e.key === "b" || e.key === "B") { tapBeat(); e.preventDefault(); }
 });
+
+/* --------------------------------------------------------------- gif picker */
+
+// Wikimedia Commons rather than Giphy: it needs no API key, it answers cross-origin, and
+// every file states a licence that allows the reuse this tool is for. Its "Animated GIF
+// files" category is 31k files deep, and its thumbnails are themselves animated, so the
+// grid shows what each one actually does.
+const COMMONS = "https://commons.wikimedia.org/w/api.php";
+const COMMONS_CATEGORY = 'incategory:"Animated GIF files"';
+
+// A gif this big has hundreds of full-resolution frames behind it, and decoding them all
+// into bitmaps is enough to bring the tab down
+const PICKER_MAX_BYTES = 20e6;
+
+// Commons hands back author and licence as HTML written by whoever uploaded the file.
+// Parsing it detached and keeping only the text keeps that out of the page as markup.
+function plainText(html) {
+  if (!html) return "";
+  return new DOMParser().parseFromString(String(html), "text/html").body.textContent.trim();
+}
+
+async function searchCommons(term) {
+  const query = new URLSearchParams({
+    action: "query", generator: "search",
+    gsrsearch: `${term} ${COMMONS_CATEGORY}`.trim(),
+    // A thumbnail of an animated gif is itself animated, so a page of them is megabytes;
+    // two dozen at 200px is enough to browse without leaning on Commons
+    gsrnamespace: "6", gsrlimit: "24",
+    prop: "imageinfo", iiprop: "url|size|mime|extmetadata", iiurlwidth: "200",
+    format: "json", origin: "*",
+  });
+
+  const response = await fetch(`${COMMONS}?${query}`);
+  if (!response.ok) throw new Error(`Commons search failed (${response.status}).`);
+  const body = await response.json();
+
+  const pages = Object.values(body.query?.pages ?? {}).sort((a, b) => a.index - b.index);
+  const found = [];
+  let tooBig = 0;
+
+  for (const page of pages) {
+    const file = page.imageinfo?.[0];
+    if (!file || file.mime !== "image/gif" || !file.thumburl) continue;
+    if (file.size > PICKER_MAX_BYTES) { tooBig++; continue; }
+
+    const meta = file.extmetadata ?? {};
+    found.push({
+      title: page.title.replace(/^File:/, "").replace(/\.gif$/i, ""),
+      url: file.url,
+      thumb: file.thumburl,
+      bytes: file.size,
+      author: plainText(meta.Artist?.value) || "unknown author",
+      licence: plainText(meta.LicenseShortName?.value) || "see Commons",
+      page: page.title,
+    });
+  }
+  return { found, tooBig };
+}
+
+function missingThumb() {
+  const box = document.createElement("span");
+  box.className = "pickmissing";
+  box.textContent = "no preview";
+  return box;
+}
+
+function renderPicker({ found, tooBig }, term) {
+  const grid = $("pickerGrid");
+  grid.replaceChildren();
+
+  for (const item of found) {
+    const image = document.createElement("img");
+    image.src = item.thumb;
+    image.alt = item.title;
+    image.loading = "lazy";
+    // Commons rate-limits, and a refused thumbnail would otherwise leave a blank tile
+    // that looks like a broken gif rather than a preview that did not arrive
+    image.onerror = () => { image.replaceWith(missingThumb()); };
+
+    const name = document.createElement("span");
+    name.className = "pickname";
+    name.textContent = item.title;
+
+    const meta = document.createElement("span");
+    meta.className = "pickmeta";
+    meta.textContent = `${item.licence} · ${item.author} · ${(item.bytes / 1e6).toFixed(1)}MB`;
+
+    const card = document.createElement("button");
+    card.title = `${item.title}\n${item.author}\n${item.licence}`;
+    card.append(image, name, meta);
+    card.onclick = () => useCommonsGif(item);
+    grid.append(card);
+  }
+
+  $("pickerNote").textContent = found.length
+    ? `${found.length} shown` + (tooBig ? `, ${tooBig} hidden for being over ${PICKER_MAX_BYTES / 1e6}MB` : "")
+    : `Nothing animated found for “${term}”.`;
+}
+
+async function useCommonsGif(item) {
+  $("picker").close();
+  toast("picker", `Fetching ${item.title} — ${(item.bytes / 1e6).toFixed(1)}MB…`, { stay: true });
+  try {
+    const response = await fetch(item.url);
+    if (!response.ok) throw new Error(`Could not fetch ${item.title} (${response.status}).`);
+    const blob = await response.blob();
+    await loadGif(new File([blob], `${item.title}.gif`, { type: "image/gif" }));
+
+    state.credit = item;
+    refresh();
+    dismiss("picker");
+  } catch (err) {
+    dismiss("picker");
+    fail(err);
+  }
+}
+
+async function runPickerSearch() {
+  const term = $("pickerQuery").value.trim();
+  $("pickerNote").textContent = "Searching…";
+  try {
+    renderPicker(await searchCommons(term), term);
+  } catch (err) {
+    $("pickerGrid").replaceChildren();
+    $("pickerNote").textContent = err.message;
+  }
+}
+
+$("browseBtn").onclick = () => {
+  $("picker").showModal();
+  if (!$("pickerGrid").children.length) runPickerSearch();
+};
+$("pickerClose").onclick = () => $("picker").close();
+$("pickerSearch").onclick = runPickerSearch;
+$("pickerQuery").onkeydown = (e) => {
+  if (e.key === "Enter") { e.preventDefault(); runPickerSearch(); }
+  e.stopPropagation();
+};
 
 /* -------------------------------------------------------------------- example */
 
@@ -1509,6 +1698,19 @@ function computeTiming() {
 
 function refresh() {
   const ready = { gif: state.frames.length > 0, audio: !!state.audioBuffer };
+
+  // A Commons licence asks to be credited, so what to credit stays on screen
+  const credit = $("gifCredit");
+  credit.replaceChildren();
+  if (state.credit) {
+    const link = document.createElement("a");
+    link.href = `https://commons.wikimedia.org/wiki/${encodeURIComponent(state.credit.page)}`;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = state.credit.title;
+    credit.append(link, document.createTextNode(
+      ` by ${state.credit.author} · ${state.credit.licence} · Wikimedia Commons`));
+  }
 
   $("undoMarkBtn").disabled = !markHistory.length;
   $("undoBeatBtn").disabled = !beatHistory.length;

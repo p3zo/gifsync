@@ -25,7 +25,8 @@ Drop in a GIF and a song and the page does the first pass itself: beat frames ar
 animation as soon as it decodes, and the song's tempo and the first few of its beats are worked out
 as soon as it does. Everything after that is correcting what it got wrong. **Try an example** loads
 a bouncing ball and a 120bpm loop, both generated for the job, if you would rather see it working
-before supplying your own.
+before supplying your own, and **Browse GIFs** searches Wikimedia Commons if you do not have one to
+hand.
 
 The two files sit down the left; lining them up is the work, and takes the middle of the page. A
 step that is not ready yet says what is missing rather than sitting there greyed out, and the
@@ -61,6 +62,27 @@ Spreading a 500ms beat over eight frames:
 | ----------------------- | ---------------------------------------------- |
 | `even`                  | 62.5 each                                      |
 | `ease in and out more`  | 3.9, 27.3, 74.2, 144.5, 144.5, 74.2, 27.3, 3.9 |
+
+### Why Wikimedia Commons and not GIPHY
+
+GIPHY has the better GIFs and was the obvious first choice, but its API returns 401 without a key
+you have to register for, and a key in a static page on GitHub Pages is a public key. Its
+[API terms](https://support.giphy.com/hc/en-us/articles/360028134111-GIPHY-API-Terms-of-Service)
+then require the application to be labelled "Powered by GIPHY" with the GIPHY logo and every GIF to
+carry its uploader's attribution. Tenor wants a Google Cloud key on the same footing. Neither says
+anything either way about re-encoding someone's GIF into an mp4 with a soundtrack on it, which is
+what this tool exists to do, and the content is user uploads whose rights GIPHY does not itself
+hold.
+
+Commons needs no key, answers cross-origin, and states a licence for every file — CC BY, CC BY-SA,
+CC0 or public domain — which is open enough to cover retiming a GIF and handing the result back.
+Its `Animated GIF files` category is a little over 31,000 files deep. The catalogue is documentary
+and scientific rather than reaction GIFs, which is the price of the licensing being unambiguous.
+Openverse was the other keyless candidate and was rejected on content: of 64 GIFs sampled across
+eight searches, 8 were actually animated.
+
+Author and licence come back from Commons as HTML written by whoever uploaded the file, so it is
+parsed detached from the page and only its text is used.
 
 ## How it works
 
