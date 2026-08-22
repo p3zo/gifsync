@@ -136,21 +136,22 @@ input[type=color] { width: 2.4rem; height: 1.7rem; padding: 1px; border: 1px sol
   background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
 }
 #log:empty::before { content: "Nothing yet."; color: var(--dim); }
-a.button {
-  display: inline-block; text-decoration: none; font-size: .875rem; font-weight: 600;
-  padding: .35rem .7rem; border-radius: 6px; border: 1px solid transparent;
-  background: var(--accent); color: var(--accent-ink);
+.make { justify-content: flex-end; }
+
+/* Anything transient goes to the same corner, so no part of the page has to keep room
+   free for a message that is usually not there. */
+#toasts {
+  position: fixed; right: 0; bottom: 0; z-index: 10; display: flex;
+  flex-direction: column-reverse; align-items: flex-end; gap: .4rem;
+  padding: 1rem; pointer-events: none;
 }
-#resultVideo { display: block; max-width: 100%; max-height: 340px; border-radius: 6px; margin-bottom: .75rem; }
-#result[hidden] { display: none; }
-.banner {
-  display: flex; align-items: baseline; gap: .75rem; font-size: .9rem;
-  border: 1px solid var(--accent); border-radius: 10px; padding: .75rem 1rem; background: var(--panel);
+.toast {
+  pointer-events: auto; cursor: pointer; max-width: 32rem;
+  padding: .5rem .85rem; border-radius: 8px; font-size: .875rem;
+  background: var(--ink); color: var(--bg);
+  box-shadow: 0 6px 20px rgb(0 0 0 / .2);
 }
-.banner[hidden] { display: none; }
-.banner button { margin-left: auto; }
-.note { margin-top: .75rem; }
-.note:empty { display: none; }
+.toast.bad { background: var(--accent); color: var(--accent-ink); }
 details.more > summary { cursor: pointer; width: fit-content; font-size: .8rem; color: var(--dim); }
 details.more > summary:hover { color: var(--ink); }
 details.more .row { margin-top: .6rem; }
@@ -171,11 +172,6 @@ details.more .row { margin-top: .6rem; }
 
 <main>
 
-<div class="banner" id="error" role="alert" hidden>
-  <span id="errorText"></span>
-  <button id="errorClose">Dismiss</button>
-</div>
-
 <section id="unsupported" hidden>
   <h2>Unsupported browser</h2>
   <div class="mono" id="unsupportedWhy"></div>
@@ -184,7 +180,7 @@ details.more .row { margin-top: .6rem; }
 <div class="side">
 
 <section id="secGif" class="step">
-  <h2><span class="num">1</span> Your GIF <span class="chip" id="secGifChip"></span></h2>
+  <h2><span class="num">1</span> Your GIF</h2>
   <p class="why" id="secGifWhy"></p>
   <div class="body">
   <div class="drop" id="gifDrop">Drop a GIF here, or click to choose one</div>
@@ -226,7 +222,7 @@ details.more .row { margin-top: .6rem; }
 </section>
 
 <section id="secAudio" class="step">
-  <h2><span class="num">2</span> Your song <span class="chip" id="secAudioChip"></span></h2>
+  <h2><span class="num">2</span> Your song</h2>
   <p class="why" id="secAudioWhy"></p>
   <div class="body">
   <div class="drop" id="audioDrop">Drop a song here, or click to choose one</div>
@@ -240,7 +236,7 @@ details.more .row { margin-top: .6rem; }
 <div class="stage">
 
 <section id="secSync" class="step">
-  <h2><span class="num">3</span> Line them up <span class="chip" id="secSyncChip"></span></h2>
+  <h2><span class="num">3</span> Line them up</h2>
   <p class="why" id="secSyncWhy"></p>
   <div class="body">
   <div class="stagerow">
@@ -314,36 +310,22 @@ details.more .row { margin-top: .6rem; }
       <label>Background <input type="color" id="bgColor" value="#000000"></label>
     </div>
   </details>
+  <div class="row make">
+    <button id="renderBrowserBtn" class="primary">Make the video</button>
+  </div>
   </div>
 </section>
 
-<section id="secRender" class="step">
-  <h2><span class="num">4</span> Save the video <span class="chip" id="secRenderChip"></span></h2>
-  <p class="why" id="secRenderWhy"></p>
-  <div class="body">
-  <div class="row">
-    <button id="renderBrowserBtn" class="primary">Make the video</button>
-  </div>
-  <div class="say warn note" id="codecNote"></div>
-  <div class="say note" id="renderStatus"></div>
-  <div class="empty" id="resultEmpty">Your finished video will appear here.</div>
-  <div id="result" hidden>
-    <video id="resultVideo" controls playsinline></video>
-    <div class="row">
-      <a id="download" class="button primary">Download the video</a>
-      <span class="say" id="resultInfo"></span>
-    </div>
-  </div>
-  <details class="more">
-    <summary>What happened during the render</summary>
-    <pre id="log"></pre>
-  </details>
-  </div>
-</section>
+<details class="more" id="logBox" hidden>
+  <summary>What happened during the render</summary>
+  <pre id="log"></pre>
+</details>
 
 </div>
 
 </main>
+
+<div id="toasts" aria-live="polite"></div>
 
 <script type="module">
 "use strict";
@@ -405,8 +387,6 @@ export function getFrameOrder(firstBeatFrame, nFrames) {
 }
 
 /* --- timing:end --- */
-
-let rendered = false;
 
 // Marking is a lot of small clicks and one of them is always a slip. Each side keeps its
 // own history of what it looked like before the last change; 50 deep is more than anyone
@@ -1572,7 +1552,7 @@ function refresh() {
 
   $("previewCanvas").hidden = !ready.gif;
   $("previewEmpty").hidden = ready.gif;
-  $("resultEmpty").hidden = rendered;
+  $("renderBrowserBtn").disabled = !currentTiming;
   syncTransport();
 
   const missing = !ready.gif && !ready.audio ? "Add a GIF and a song first."
@@ -1583,20 +1563,16 @@ function refresh() {
     { id: "secGif", done: ready.gif && state.beats.size > 0, why: "" },
     { id: "secAudio", done: ready.audio, why: "" },
     { id: "secSync", done: !!currentTiming, why: missing },
-    { id: "secRender", done: rendered,
-      why: missing || (currentTiming ? "" : "Mark a beat frame in your GIF first.") },
   ];
 
   // Point at the first step still to do, so there is always one obvious place to look
   const current = steps.findIndex((s) => !s.done && !s.why);
   steps.forEach((s, i) => {
     // a locked step cannot also be finished, whatever its own condition says
-    const done = s.done && !s.why;
     $(s.id).classList.toggle("is-locked", !!s.why);
-    $(s.id).classList.toggle("is-done", done);
+    $(s.id).classList.toggle("is-done", s.done && !s.why);
     $(s.id).classList.toggle("is-current", i === current);
     $(s.id + "Why").textContent = s.why;
-    $(s.id + "Chip").textContent = done ? "Done" : "";
   });
 
   // Tempo changes take effect on the running preview; moving the downbeat has to
@@ -1614,26 +1590,49 @@ function refresh() {
 function log(line) {
   $("log").textContent += line + "\n";
   $("log").scrollTop = $("log").scrollHeight;
+  $("logBox").hidden = false;
 }
 
-// One line of plain progress, with the running commentary folded away under the log
-function status(line) {
-  $("renderStatus").textContent = line;
+// Progress, notices and errors all end up here rather than each holding a strip of the
+// page open for a message that is usually not there. A message replaces the one before it
+// under the same key, so progress counts up in place instead of stacking.
+const showing = new Map();
+
+function toast(key, text, { stay = false, bad = false } = {}) {
+  if (!text) return dismiss(key);
+
+  let el = showing.get(key);
+  if (!el) {
+    el = document.createElement("div");
+    el.onclick = () => dismiss(key);
+    $("toasts").append(el);
+    showing.set(key, el);
+  }
+  el.className = bad ? "toast bad" : "toast";
+  el.textContent = text;
+
+  clearTimeout(el.timer);
+  // anything still running keeps its message up; anything finished says so and goes
+  if (!stay) el.timer = setTimeout(() => dismiss(key), 6000);
+}
+
+function dismiss(key) {
+  const el = showing.get(key);
+  if (!el) return;
+  clearTimeout(el.timer);
+  el.remove();
+  showing.delete(key);
 }
 
 function fail(err) {
   console.error(err);
   log(`ERROR ${err.message}`);
-  $("errorText").textContent = err.message;
-  $("error").hidden = false;
-  $("error").scrollIntoView({ block: "nearest" });
+  toast("error", err.message, { stay: true, bad: true });
 }
 
 function clearError() {
-  $("error").hidden = true;
+  dismiss("error");
 }
-
-$("errorClose").onclick = clearError;
 
 /* --------------------------------------------------------------------- mp4 */
 // A small MP4 writer. The point of writing one rather than pulling a library in is that
@@ -1904,7 +1903,7 @@ async function encodeVideo(schedule, width, height) {
     }
     if (i % 200 === 0) {
       log(`  video ${i}/${schedule.length} frames`);
-      status(`Drawing the video… ${Math.round((100 * i) / schedule.length)}%`);
+      toast("render", `Drawing the video… ${Math.round((100 * i) / schedule.length)}%`, { stay: true });
     }
     if (failure) throw failure;
   }
@@ -2069,27 +2068,27 @@ function readOpusPreSkip(description) {
   return description[10] | (description[11] << 8);
 }
 
-// A finished video belongs to the files it was made from, so a new one retires it
+// The url has to outlive the click that saves the file, so it is let go of when the next
+// render starts rather than on a timer
+let savedUrl = null;
+
 function clearRender() {
-  rendered = false;
   $("log").textContent = "";
-  status("");
-  const link = $("download");
-  if (link.href) URL.revokeObjectURL(link.href);
-  link.removeAttribute("href");
-  // the player has to let go of the url too, or it holds one that has been revoked
-  $("resultVideo").removeAttribute("src");
-  $("resultVideo").load();
-  $("result").hidden = true;
+  $("logBox").hidden = true;
+  $("logBox").open = false;
+  dismiss("render");
+  if (savedUrl) URL.revokeObjectURL(savedUrl);
+  savedUrl = null;
 }
 
-function offerDownload(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  $("download").href = url;
-  $("download").download = filename;
-  $("resultVideo").src = url;
-  $("resultInfo").textContent = `${filename} · ${(blob.size / 1e6).toFixed(1)}MB`;
-  $("result").hidden = false;
+// Straight to the downloads folder: the file is what was asked for, and playing it back
+// is something the machine already knows how to do
+function saveVideo(blob, filename) {
+  savedUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = savedUrl;
+  link.download = filename;
+  link.click();
 }
 
 function outputName() {
@@ -2105,6 +2104,7 @@ $("renderBrowserBtn").onclick = async () => {
   button.disabled = true;
   clearError();
   clearRender();
+  if (codecWarning) toast("codec", codecWarning, { stay: true });
 
   try {
     const seconds = state.audioBuffer.duration - downbeat();
@@ -2114,38 +2114,40 @@ $("renderBrowserBtn").onclick = async () => {
 
     const schedule = buildSchedule(timing, seconds);
     log(`Rendering ${schedule.length} frames over ${seconds.toFixed(2)}s at ${width}×${height}`);
-    status("Drawing the video… 0%");
+    toast("render", "Drawing the video… 0%", { stay: true });
 
     const video = await encodeVideo(schedule, width, height);
     log(`  video done, ${video.samples.length} samples`);
-    status("Adding the song…");
+    toast("render", "Adding the song…", { stay: true });
 
     const audio = await encodeAudio(seconds);
     log(`  audio done, ${audio.codec}, ${audio.samples.length} samples, ` +
         `${audio.preSkip} samples of encoder priming skipped`);
 
-    offerDownload(buildMp4(video, audio), outputName());
-    rendered = true;
-    refresh();
+    const file = buildMp4(video, audio);
+    const name = outputName();
+    saveVideo(file, name);
     log("Done.");
-    status("");
+    toast("render", `Saved ${name} — ${(file.size / 1e6).toFixed(1)}MB`);
   } catch (err) {
+    dismiss("render");
     fail(err);
   } finally {
-    status("");
     button.disabled = false;
   }
 };
 
-// Say up front if this browser will produce an Opus track, rather than after a render
+// Worked out at startup rather than mid-render, but only worth saying when a file is
+// about to exist that the reader may not be able to play
+let codecWarning = "";
 if ("AudioEncoder" in window) {
   pickAudioCodec().then((codec) => {
     if (codec === "opus") {
-      $("codecNote").textContent =
+      codecWarning =
         "No AAC encoder in this browser, so the audio will be Opus. The mp4 plays in " +
         "Chrome, Firefox and VLC, but not QuickTime or Safari. Chrome or Safari will give you AAC.";
     }
-  }).catch((err) => { $("codecNote").textContent = err.message; });
+  }).catch((err) => { codecWarning = err.message; });
 }
 
 addEventListener("resize", () => { if (state.audioBuffer) refresh(); });
