@@ -806,15 +806,27 @@ function startPlayback() {
   actx.resume();
 
   const from = downbeat();
+  const span = state.audioBuffer.duration - from;
+  if (!(span > 0)) {
+    fail(new Error("The downbeat is at the very end of the song, so there is nothing to play."));
+    return;
+  }
+
   const source = actx.createBufferSource();
   source.buffer = state.audioBuffer;
   source.connect(actx.destination);
+
+  // Round and round from the downbeat to the end of the song, so a run of the animation
+  // can be watched over and over without reaching for the button between each one
+  source.loop = true;
+  source.loopStart = from;
+  source.loopEnd = state.audioBuffer.duration;
 
   const t0 = actx.currentTime + 0.08;
   source.start(t0, from);
   source.onended = () => { if (playback?.source === source) stopPlayback(); };
 
-  playback = { source, t0, from, clicks: [], nextClick: t0, raf: 0 };
+  playback = { source, t0, from, span, clicks: [], nextCycle: 0, nextBeat: 0, raf: 0 };
   playback.raf = requestAnimationFrame(tickPlayback);
   syncTransport();
 }
@@ -834,10 +846,14 @@ function tickPlayback() {
   const elapsed = actx.currentTime - playback.t0;
 
   if (elapsed >= 0) {
-    drawWave(playback.from + elapsed);
+    // the source jumps back to the downbeat at the end of the song, so the playhead and
+    // the animation wrap with it rather than running off past the end
+    const pos = elapsed % playback.span;
+
+    drawWave(playback.from + pos);
     // currentTiming is read fresh every frame, so a tempo change lands immediately
     if (currentTiming) {
-      const ms = elapsed * 1000;
+      const ms = pos * 1000;
       const inLoop = ms % currentTiming.loopMs;
       let i = currentTiming.onsets.findIndex((o) => o > inLoop) - 1;
       if (i < 0) i = currentTiming.durations.length - 1;
@@ -873,26 +889,41 @@ $("tapBeatBtn").onclick = tapBeat;
 
 /* -------------------------------------------------------------- click track */
 
-// Scheduled a fraction of a second ahead rather than all at once, so changing the tempo
-// mid-play can drop the clicks that have not sounded yet and re-lay them on the new grid
+// Beat k of pass c through the song sounds at t0 + c*span + k*step. Scheduled a fraction
+// of a second ahead rather than all at once, so changing the tempo mid-play can drop the
+// clicks that have not sounded yet and re-lay them on the new grid — and so the grid can
+// start over at the downbeat on every pass instead of drifting on across the seam.
 function pumpClicks() {
   if (!$("clickTrack").checked) return;
 
   const msPerBeat = getMsPerBeat();
   if (!msPerBeat) return;
 
-  while (playback.nextClick < actx.currentTime + 0.4) {
-    if (playback.nextClick > actx.currentTime) {
+  const step = msPerBeat / 1000;
+  const horizon = actx.currentTime + 0.4;
+
+  while (true) {
+    const cycleStart = playback.t0 + playback.nextCycle * playback.span;
+    const at = cycleStart + playback.nextBeat * step;
+
+    if (at >= cycleStart + playback.span) {
+      playback.nextCycle++;
+      playback.nextBeat = 0;
+      continue;
+    }
+    if (at >= horizon) break;
+
+    if (at > actx.currentTime) {
       const osc = actx.createOscillator(), gain = actx.createGain();
       osc.frequency.value = 1500;
-      gain.gain.setValueAtTime(0.07, playback.nextClick);
-      gain.gain.exponentialRampToValueAtTime(0.001, playback.nextClick + 0.04);
+      gain.gain.setValueAtTime(0.07, at);
+      gain.gain.exponentialRampToValueAtTime(0.001, at + 0.04);
       osc.connect(gain).connect(actx.destination);
-      osc.start(playback.nextClick);
-      osc.stop(playback.nextClick + 0.05);
-      playback.clicks.push({ osc, at: playback.nextClick });
+      osc.start(at);
+      osc.stop(at + 0.05);
+      playback.clicks.push({ osc, at });
     }
-    playback.nextClick += msPerBeat / 1000;
+    playback.nextBeat++;
   }
 
   playback.clicks = playback.clicks.filter((c) => c.at > actx.currentTime - 1);
@@ -910,10 +941,10 @@ function retimeClicks() {
   const msPerBeat = getMsPerBeat();
   if (!msPerBeat) return;
 
-  const origin = playback.t0 + (downbeat() - playback.from);
   const step = msPerBeat / 1000;
-  const passed = Math.max(0, Math.ceil((actx.currentTime + 0.05 - origin) / step));
-  playback.nextClick = origin + passed * step;
+  const elapsed = Math.max(0, actx.currentTime + 0.05 - playback.t0);
+  playback.nextCycle = Math.floor(elapsed / playback.span);
+  playback.nextBeat = Math.ceil((elapsed - playback.nextCycle * playback.span) / step);
 }
 
 /* --------------------------------------------------------------------- tempo */
