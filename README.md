@@ -16,6 +16,24 @@ x [Gypsy Girl by Toman](https://www.youtube.com/watch?v=dKZQRG54vHE).
 Credits: [Nodding Yes GIF](https://giphy.com/gifs/kFTJEiV9nZlhM2juSN)
 x [Epik High - 낙화 (落花) {The Falling Flower}](https://www.youtube.com/watch?v=0J39Amz5o-Y).
 
+## Beat marker
+
+`docs/index.html` is a page for picking the beat frames without counting them by hand. Drop a GIF in,
+step through the frames, mark the ones the beat should land on, drop a song in and click its first
+downbeat on the waveform, then preview the two together before rendering.
+
+Open the file directly and it renders the mp4 itself, using WebCodecs. Serve it with
+
+    python marker.py
+
+and it also offers to render through `sync.py`, trimming the audio to the downbeat first, and to
+estimate the tempo with essentia. From inside the container use `python marker.py --host 0.0.0.0`
+and open <http://localhost:5000>.
+
+The two renderers agree on the retiming — `node docs/test_timing.mjs` checks the page's copy against
+`sync.py` — but not on the encode. The browser writes exact per-frame timestamps, while `sync.py`
+goes through ffmpeg's concat demuxer and its 40ms grid.
+
 ## Usage
 
 Install [Docker Compose](https://docs.docker.com/compose/install/) and start the Docker daemon.
