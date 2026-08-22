@@ -26,17 +26,37 @@ body {
 header { max-width: 68rem; margin: 0 auto; padding: 1.5rem 0 1rem; }
 h1 { font-size: 1.3rem; margin: 0 0 .4rem; letter-spacing: -.01em; }
 #intro { margin: 0; max-width: 46rem; color: var(--dim); font-size: .925rem; }
+header .row { margin-top: .9rem; }
 kbd {
   font: inherit; font-family: var(--mono); font-size: .8em; padding: .05em .35em;
   border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink);
 }
-h2 { font-size: .8rem; margin: 0 0 .75rem; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); }
+h2 { font-size: .95rem; margin: 0 0 .9rem; display: flex; align-items: center; gap: .5rem; }
 main { max-width: 68rem; margin: 0 auto; display: grid; gap: 1rem; }
 section {
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1rem;
   min-width: 0; /* let the filmstrip scroll rather than stretching the page */
 }
-section[data-off] { opacity: .45; pointer-events: none; }
+section.is-current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+/* a locked step collapses to its reason: nothing to read, nothing to reach for */
+.is-locked .body { display: none; }
+.is-locked .why { margin-bottom: 0; }
+.num {
+  display: grid; place-items: center; flex: none; width: 1.4rem; height: 1.4rem;
+  border-radius: 50%; background: var(--line); color: var(--ink); font-size: .75rem; font-weight: 700;
+}
+.is-current .num { background: var(--accent); color: var(--accent-ink); }
+.is-done .num { background: var(--ok); color: var(--bg); }
+.chip { margin-left: auto; font-size: .7rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--ok); }
+.why { margin: -.3rem 0 .9rem; color: var(--dim); font-size: .875rem; }
+.why:empty { display: none; }
+.empty {
+  display: grid; place-items: center; min-height: 9rem; margin-bottom: .75rem; padding: 1rem;
+  border: 1.5px dashed var(--line); border-radius: 8px; color: var(--dim); font-size: .875rem;
+  text-align: center;
+}
+.empty[hidden] { display: none; }
 .row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
 .row + .row { margin-top: .75rem; }
 button {
@@ -50,8 +70,12 @@ label { display: inline-flex; align-items: center; gap: .4rem; font-size: .875re
 input[type=number], select { font: inherit; font-size: .875rem; padding: .3rem .4rem;
   border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
 input[type=number] { width: 6rem; }
-.key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; }
-.k-mark { background: var(--accent); } .k-grid { background: var(--grid); } .k-loop { background: var(--loop); }
+/* Each kind of mark on the waveform has its own shape as well as its own colour, and
+   the legend draws that shape rather than a colour swatch. */
+.legend { gap: 1.25rem; }
+.legend span { display: inline-flex; align-items: center; gap: .4rem; color: var(--dim); font-size: .8rem; }
+.glyph { width: 12px; height: 18px; flex: none; }
+.g-mark { color: var(--accent); } .g-grid { color: var(--grid); } .g-loop { color: var(--loop); }
 .drop {
   border: 1.5px dashed var(--line); border-radius: 8px; padding: 1.75rem 1rem; text-align: center;
   color: var(--dim); cursor: pointer; font-size: .9rem;
@@ -62,6 +86,7 @@ input[type=number] { width: 6rem; }
   background: repeating-conic-gradient(var(--line) 0 25%, transparent 0 50%) 0 0/16px 16px;
   border-radius: 6px; margin-bottom: .75rem;
 }
+#frameCanvas[hidden], #previewCanvas[hidden] { display: none; }
 #strip { display: flex; gap: 3px; overflow-x: auto; padding: .5rem 0; margin-top: .75rem; }
 #strip canvas {
   height: 54px; flex: none; border-radius: 3px; cursor: pointer;
@@ -70,18 +95,47 @@ input[type=number] { width: 6rem; }
 #strip canvas.cur { border-color: var(--ink); }
 #strip canvas.beat { border-color: var(--accent); }
 #strip canvas.cur.beat { outline: 2px solid var(--ink); outline-offset: 1px; }
+#beatStrip {
+  display: flex; gap: .5rem; overflow-x: auto; padding: .6rem 0 .5rem;
+  border-top: 1px solid var(--line); /* two thumbnail rows in a row need telling apart */
+}
+#beatStrip:empty { display: none; }
+#beatStrip figure { margin: 0; flex: none; text-align: center; cursor: pointer; }
+#beatStrip canvas {
+  height: 54px; display: block; border-radius: 3px; background: var(--bg);
+  border: 2px solid var(--accent);
+}
+#beatStrip figure.cur canvas { outline: 2px solid var(--ink); outline-offset: 1px; }
+#beatStrip figcaption { font-size: .7rem; color: var(--dim); margin-top: .25rem; }
 #wave { display: block; width: 100%; height: 110px; cursor: crosshair; border-radius: 6px; background: var(--bg); }
 .mono { font-family: var(--mono); font-size: .8rem; color: var(--dim); }
-.mono b { color: var(--ink); font-weight: 600; }
+.say { font-size: .875rem; color: var(--dim); }
+.mono b, .say b { color: var(--ink); font-weight: 600; }
 .warn { color: var(--accent); }
 #log {
   font-family: var(--mono); font-size: .75rem; white-space: pre-wrap; word-break: break-word;
   max-height: 15rem; overflow-y: auto; margin: .75rem 0 0; padding: .6rem;
   background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
 }
-#log:empty { display: none; }
-a#download { display: inline-block; margin-top: .75rem; color: var(--accent); font-weight: 600; }
-a#download[hidden] { display: none; }
+#log:empty::before { content: "Nothing yet."; color: var(--dim); }
+a.button {
+  display: inline-block; text-decoration: none; font-size: .875rem; font-weight: 600;
+  padding: .35rem .7rem; border-radius: 6px; border: 1px solid transparent;
+  background: var(--accent); color: var(--accent-ink);
+}
+#resultVideo { display: block; max-width: 100%; max-height: 340px; border-radius: 6px; margin-bottom: .75rem; }
+#result[hidden] { display: none; }
+.banner {
+  display: flex; align-items: baseline; gap: .75rem; font-size: .9rem;
+  border: 1px solid var(--accent); border-radius: 10px; padding: .75rem 1rem; background: var(--panel);
+}
+.banner[hidden] { display: none; }
+.banner button { margin-left: auto; }
+.note { margin-top: .75rem; }
+.note:empty { display: none; }
+details.more > summary { cursor: pointer; width: fit-content; font-size: .8rem; color: var(--dim); }
+details.more > summary:hover { color: var(--ink); }
+details.more .row { margin-top: .6rem; }
 #unsupported { border-color: var(--accent); }
 </style>
 </head>
@@ -92,65 +146,96 @@ a#download[hidden] { display: none; }
   <p id="intro">Drop in a GIF and mark the frames where you want the beat to hit. Drop in a song
   and mark its beats: click them on the waveform, or tap <kbd>B</kbd> along to the music. Play it
   back to check, nudge anything that feels off, then render and download.</p>
+  <div class="row">
+    <button id="exampleBtn">Try an example</button>
+    <span class="say" id="exampleNote"></span>
+  </div>
 </header>
 
 <main>
+
+<div class="banner" id="error" role="alert" hidden>
+  <span id="errorText"></span>
+  <button id="errorClose">Dismiss</button>
+</div>
 
 <section id="unsupported" hidden>
   <h2>Unsupported browser</h2>
   <div class="mono" id="unsupportedWhy"></div>
 </section>
 
-<section id="secGif">
-  <h2>GIF</h2>
-  <div class="drop" id="gifDrop">Drop a GIF, or click to choose</div>
+<section id="secGif" class="step">
+  <h2><span class="num">1</span> Your GIF <span class="chip" id="secGifChip"></span></h2>
+  <p class="why" id="secGifWhy"></p>
+  <div class="body">
+  <div class="drop" id="gifDrop">Drop a GIF here, or click to choose one</div>
   <input type="file" id="gifInput" accept="image/gif" hidden>
   <div id="gifBody" hidden>
     <canvas id="frameCanvas"></canvas>
     <div class="row">
       <button id="prevBtn">&#9664;</button>
       <button id="nextBtn">&#9654;</button>
-      <button id="markBtn" class="primary">Mark beat (space)</button>
-      <button id="clearBtn">Clear marks</button>
-      <span class="mono" id="framePos"></span>
+      <button id="markBtn" class="primary">Mark this frame (space)</button>
+      <button id="undoMarkBtn">Undo</button>
+      <button id="clearBtn">Clear all marks</button>
+      <span class="say" id="framePos"></span>
     </div>
     <div id="strip"></div>
-    <div class="mono" id="beatList"></div>
+    <div id="beatStrip"></div>
+    <div class="say" id="beatList"></div>
+  </div>
   </div>
 </section>
 
-<section id="secAudio">
-  <h2>Song</h2>
-  <div class="drop" id="audioDrop">Drop an audio file, or click to choose</div>
+<section id="secAudio" class="step">
+  <h2><span class="num">2</span> Your song <span class="chip" id="secAudioChip"></span></h2>
+  <p class="why" id="secAudioWhy"></p>
+  <div class="body">
+  <div class="drop" id="audioDrop">Drop a song here, or click to choose one</div>
   <input type="file" id="audioInput" accept="audio/*" hidden>
   <div id="audioBody" hidden>
     <canvas id="wave"></canvas>
     <div class="row">
       <button id="tapBeatBtn">Tap a beat (B)</button>
-      <button id="clearBeatsBtn">Clear beat marks</button>
-      <span class="mono" id="audioSummary"></span>
+      <button id="undoBeatBtn">Undo</button>
+      <button id="clearBeatsBtn">Clear all beats</button>
+      <span class="say" id="audioSummary"></span>
     </div>
-    <div class="row"><span class="mono">
-      <span class="key k-mark"></span> beats you marked in the song
-      &nbsp; <span class="key k-grid"></span> where the gif's beat frames land
-      &nbsp; <span class="key k-loop"></span> where the gif's loop restarts
-    </span></div>
+    <div class="row legend">
+      <span><svg class="glyph g-mark" viewBox="0 0 12 18" aria-hidden="true">
+        <polygon points="1,0 11,0 6,7" fill="currentColor"/>
+        <line x1="6" y1="0" x2="6" y2="9" stroke="currentColor" stroke-width="2"/></svg>
+        beats you marked in the song</span>
+      <span><svg class="glyph g-grid" viewBox="0 0 12 18" aria-hidden="true">
+        <line x1="6" y1="18" x2="6" y2="7" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 3"/></svg>
+        where the gif's beat frames land</span>
+      <span><svg class="glyph g-loop" viewBox="0 0 12 18" aria-hidden="true">
+        <rect x="3" y="0" width="6" height="6" fill="currentColor"/>
+        <line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="1"/></svg>
+        where the gif's loop restarts</span>
+    </div>
+  </div>
   </div>
 </section>
 
-<section id="secSync" data-off>
-  <h2>Sync</h2>
+<section id="secSync" class="step">
+  <h2><span class="num">3</span> Line them up <span class="chip" id="secSyncChip"></span></h2>
+  <p class="why" id="secSyncWhy"></p>
+  <div class="body">
   <canvas id="previewCanvas"></canvas>
+  <div class="empty" id="previewEmpty">Your GIF plays here, in time with the song.</div>
   <div class="row">
     <button id="previewBtn" class="primary">Play preview</button>
-    <span class="mono" id="previewPos"></span>
+    <span class="say" id="previewPos"></span>
   </div>
   <div class="row">
-    <label>BPM <input type="number" id="bpm" step="0.1" min="1" value="120"></label>
-    <button id="tapBtn">Tap</button>
-    <button id="estimateBtn">Estimate</button>
-    <span class="mono" id="estimateNote"></span>
-    <label>Animation hits
+    <label>Tempo (BPM) <input type="number" id="bpm" step="0.1" min="1" value="120"></label>
+    <button id="tapBtn">Tap the tempo</button>
+    <button id="estimateBtn">Find the tempo</button>
+    <span class="say" id="estimateNote"></span>
+  </div>
+  <div class="row">
+    <label>The GIF hits
       <select id="hits">
         <option value="0.25">every 4 beats</option>
         <option value="0.5">every 2 beats</option>
@@ -159,26 +244,46 @@ a#download[hidden] { display: none; }
         <option value="4">four times a beat</option>
       </select>
     </label>
-    <label>Easing
-      <select id="interpolation">
-        <option value="linear">linear</option>
-        <option value="quadratic">quadratic</option>
-        <option value="cubic">cubic</option>
-      </select>
-    </label>
-    <label><input type="checkbox" id="clickTrack"> Click track</label>
   </div>
-  <div class="row"><span class="mono" id="timingSummary"></span></div>
+  <details class="more">
+    <summary>More options</summary>
+    <div class="row">
+      <label>Between beats
+        <select id="interpolation">
+          <option value="linear">even</option>
+          <option value="quadratic">ease in and out</option>
+          <option value="cubic">ease in and out more</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="clickTrack"> Play a click on each beat</label>
+    </div>
+  </details>
+  <div class="row"><span class="say" id="timingSummary"></span></div>
+  </div>
 </section>
 
-<section id="secRender" data-off>
-  <h2>Render</h2>
+<section id="secRender" class="step">
+  <h2><span class="num">4</span> Save the video <span class="chip" id="secRenderChip"></span></h2>
+  <p class="why" id="secRenderWhy"></p>
+  <div class="body">
   <div class="row">
-    <button id="renderBrowserBtn" class="primary">Render</button>
+    <button id="renderBrowserBtn" class="primary">Make the video</button>
   </div>
-  <div class="row"><span class="mono warn" id="codecNote"></span></div>
-  <pre id="log"></pre>
-  <a id="download" hidden>Download</a>
+  <div class="say warn note" id="codecNote"></div>
+  <div class="say note" id="renderStatus"></div>
+  <div class="empty" id="resultEmpty">Your finished video will appear here.</div>
+  <div id="result" hidden>
+    <video id="resultVideo" controls playsinline></video>
+    <div class="row">
+      <a id="download" class="button primary">Download the video</a>
+      <span class="say" id="resultInfo"></span>
+    </div>
+  </div>
+  <details class="more">
+    <summary>What happened during the render</summary>
+    <pre id="log"></pre>
+  </details>
+  </div>
 </section>
 
 </main>
@@ -187,6 +292,11 @@ a#download[hidden] { display: none; }
 "use strict";
 
 const $ = (id) => document.getElementById(id);
+
+// fetch reaches nothing when the page is opened straight off the disk, which rules out
+// the example files and the tempo model. Everything else works from a file:// url.
+const SERVED = location.protocol !== "file:";
+const NEEDS_SERVING = "This needs the page to be served, not opened from a file.";
 
 /* --- timing:start --- pinned by docs/test_timing.mjs against timing_cases.json --- */
 
@@ -239,6 +349,19 @@ export function getFrameOrder(firstBeatFrame, nFrames) {
 
 /* --- timing:end --- */
 
+let rendered = false;
+
+// Marking is a lot of small clicks and one of them is always a slip. Each side keeps its
+// own history of what it looked like before the last change; 50 deep is more than anyone
+// walks back, and the snapshots are a handful of numbers each.
+const UNDO_LIMIT = 50;
+const markHistory = [], beatHistory = [];
+
+function remember(history, snapshot) {
+  history.push(snapshot);
+  if (history.length > UNDO_LIMIT) history.shift();
+}
+
 const state = {
   gifFile: null, frames: [], width: 0, height: 0, cur: 0, beats: new Set(),
   audioFile: null, audioBuffer: null, audioBeats: [], peaks: null,
@@ -262,15 +385,22 @@ if (MISSING.length) {
 /* ------------------------------------------------------------------------ gif */
 
 function wireDrop(dropId, inputId, onFile) {
-  const drop = $(dropId), input = $(inputId);
+  const drop = $(dropId), input = $(inputId), idle = drop.textContent;
+
+  // A file that will not load leaves the zone reading "Decoding…" for ever otherwise
+  const handle = (file) => {
+    clearError();
+    onFile(file).catch((err) => { drop.textContent = idle; fail(err); });
+  };
+
   drop.onclick = () => input.click();
-  input.onchange = () => input.files[0] && onFile(input.files[0]);
+  input.onchange = () => input.files[0] && handle(input.files[0]);
   drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
   drop.ondragleave = () => drop.classList.remove("over");
   drop.ondrop = (e) => {
     e.preventDefault();
     drop.classList.remove("over");
-    if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files[0]) handle(e.dataTransfer.files[0]);
   };
 }
 
@@ -278,12 +408,19 @@ async function loadGif(file) {
   // A playing source keeps the buffer and frames it started with, so it would carry on
   // against a page that has already moved to the new file
   stopPlayback();
+  clearRender();
   $("gifDrop").textContent = `Decoding ${file.name}…`;
 
   const decoder = new ImageDecoder({ data: await file.arrayBuffer(), type: "image/gif" });
-  await decoder.tracks.ready;
-  // frameCount only settles once the whole gif has been parsed
-  await decoder.completed;
+  try {
+    await decoder.tracks.ready;
+    // frameCount only settles once the whole gif has been parsed
+    await decoder.completed;
+  } catch (err) {
+    // the decoder's own wording ("Failed to retrieve track metadata") says nothing to
+    // someone who has simply picked the wrong file, so name the file and keep the reason
+    throw new Error(`${file.name} could not be read as a GIF. ${err.message}`);
+  }
 
   const count = decoder.tracks.selectedTrack.frameCount;
   const frames = [];
@@ -302,6 +439,7 @@ async function loadGif(file) {
   state.height = frames[0].height;
   state.cur = 0;
   state.beats = new Set();
+  markHistory.length = 0;
 
   $("gifDrop").textContent = `${file.name} — ${count} frames, ${state.width}×${state.height}. Drop another to replace.`;
   $("gifBody").hidden = false;
@@ -312,6 +450,7 @@ async function loadGif(file) {
   $("previewCanvas").width = state.width;
   $("previewCanvas").height = state.height;
 
+  beatStripKey = null;
   buildStrip();
   drawFrame();
   refresh();
@@ -328,6 +467,37 @@ function buildStrip() {
     c.getContext("2d").drawImage(bmp, 0, 0, w, h);
     c.onclick = () => { state.cur = i; drawFrame(); refresh(); };
     strip.append(c);
+  });
+}
+
+// The marked frames, pulled out of the filmstrip and shown in the order the beat will
+// hit them, so what has been chosen is readable without hunting through the whole strip.
+let beatStripKey = null;
+
+function buildBeatStrip() {
+  const beats = [...state.beats].sort((a, b) => a - b);
+  const key = beats.join(",");
+  if (key === beatStripKey) return;
+  beatStripKey = key;
+
+  const strip = $("beatStrip");
+  strip.replaceChildren();
+  beats.forEach((frame, i) => {
+    const bmp = state.frames[frame];
+    const h = 54, w = Math.max(1, Math.round((bmp.width / bmp.height) * h));
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    c.getContext("2d").drawImage(bmp, 0, 0, w, h);
+
+    const caption = document.createElement("figcaption");
+    caption.textContent = `Beat ${i + 1}`;
+
+    const item = document.createElement("figure");
+    item.dataset.frame = frame;
+    item.title = `Frame ${frame + 1}`;
+    item.append(c, caption);
+    item.onclick = () => { state.cur = frame; drawFrame(); refresh(); };
+    strip.append(item);
   });
 }
 
@@ -351,15 +521,26 @@ function step(delta) {
 
 function toggleMark() {
   if (!state.frames.length) return;
+  remember(markHistory, new Set(state.beats));
   state.beats.has(state.cur) ? state.beats.delete(state.cur) : state.beats.add(state.cur);
   refresh();
 }
 
-wireDrop("gifDrop", "gifInput", (f) => loadGif(f).catch(fail));
+wireDrop("gifDrop", "gifInput", loadGif);
 $("prevBtn").onclick = () => step(-1);
 $("nextBtn").onclick = () => step(1);
 $("markBtn").onclick = toggleMark;
-$("clearBtn").onclick = () => { state.beats.clear(); refresh(); };
+$("clearBtn").onclick = () => {
+  remember(markHistory, new Set(state.beats));
+  state.beats.clear();
+  refresh();
+};
+
+$("undoMarkBtn").onclick = () => {
+  if (!markHistory.length) return;
+  state.beats = markHistory.pop();
+  refresh();
+};
 
 addEventListener("keydown", (e) => {
   if (e.target.matches("input, select, textarea")) return;
@@ -369,6 +550,55 @@ addEventListener("keydown", (e) => {
   else if (e.key === "b" || e.key === "B") { tapBeat(); e.preventDefault(); }
 });
 
+/* -------------------------------------------------------------------- example */
+
+// A page that fills itself in is the quickest way to see what any of this does. Both
+// files were generated for the job, so there is nothing to license: the ball hits the
+// ground on frames 0 and 8, and the loop is four to the floor at 120bpm.
+const EXAMPLE = {
+  gif: "example/bouncing-ball.gif",
+  audio: "example/four-on-the-floor.mp3",
+  gifBeats: [0, 8],
+  songBeats: [0, 0.5, 1, 1.5],
+  bpm: "120",
+};
+
+async function loadExample() {
+  const grab = async (path, type) => {
+    const response = await fetch(path);
+    if (!response.ok) throw new Error(`Could not load ${path} — the server said ${response.status}.`);
+    return new File([await response.blob()], path.split("/").pop(), { type });
+  };
+
+  await loadGif(await grab(EXAMPLE.gif, "image/gif"));
+  await loadAudio(await grab(EXAMPLE.audio, "audio/mpeg"));
+
+  state.beats = new Set(EXAMPLE.gifBeats);
+  state.audioBeats = [...EXAMPLE.songBeats];
+  $("bpm").value = EXAMPLE.bpm;
+  refresh();
+}
+
+$("exampleBtn").onclick = async () => {
+  const button = $("exampleBtn");
+  button.disabled = true;
+  button.textContent = "Loading…";
+  clearError();
+  try {
+    await loadExample();
+  } catch (err) {
+    fail(err);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Try an example";
+  }
+};
+
+if (!SERVED) {
+  $("exampleBtn").disabled = true;
+  $("exampleNote").textContent = NEEDS_SERVING;
+}
+
 /* ---------------------------------------------------------------------- audio */
 
 // Pin the rate: Opus only encodes at 48kHz, and this makes decodeAudioData hand us
@@ -377,25 +607,37 @@ const actx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate
 
 async function loadAudio(file) {
   stopPlayback();
+  clearRender();
   // the previous song's tempo estimate does not describe this one
-  $("estimateNote").textContent = "";
+  $("estimateNote").textContent = SERVED ? "" : NEEDS_SERVING;
   $("audioDrop").textContent = `Decoding ${file.name}…`;
 
   const bytes = await file.arrayBuffer();
-  state.audioBuffer = await actx.decodeAudioData(bytes.slice(0));
+  try {
+    state.audioBuffer = await actx.decodeAudioData(bytes.slice(0));
+  } catch (err) {
+    throw new Error(`${file.name} could not be read as audio. ${err.message}`);
+  }
   state.audioFile = file;
   state.audioBeats = [];
   state.peaks = null;
+  beatHistory.length = 0;
 
+  const total = Math.round(state.audioBuffer.duration);
   $("audioDrop").textContent =
-    `${file.name} — ${state.audioBuffer.duration.toFixed(2)}s. Drop another to replace.`;
+    `${file.name} — ${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")} long. Drop another to replace.`;
   $("audioBody").hidden = false;
 
   // Fetching the tempo model is most of the wait on a first estimate, so start it now
   // rather than when the button is pressed. Nothing here depends on it arriving.
-  loadTempoModel().catch(() => {});
+  if (SERVED) loadTempoModel().catch(() => {});
 
   refresh();
+}
+
+// The tempo is read off the beats, so putting a beat back has to put the tempo back with it
+function rememberBeats() {
+  remember(beatHistory, { beats: state.audioBeats.slice(), bpm: $("bpm").value });
 }
 
 // The first beat mark is the downbeat: the moment the animation starts from
@@ -444,29 +686,55 @@ function drawWave(playheadSeconds = null) {
   }
 
   // Where each beat frame of the animation will land, and where the loop starts over.
-  // Batched into two paths because a fast setting puts a couple of thousand lines here.
+  // Batched into paths because a fast setting puts a couple of thousand lines here.
   if (currentTiming) {
     const step = currentTiming.msPerBeat / 1000;
-    const grid = new Path2D(), loop = new Path2D();
+    const grid = new Path2D(), loop = new Path2D(), loopCaps = new Path2D();
+    // The square caps only go on where there is room to tell them apart; packed tighter
+    // than that they merge into a solid band and say less than the bare lines do.
+    const caps = (step / duration) * w >= 5;
     for (let k = 0; ; k++) {
       const t = downbeat() + k * step;
       if (t >= duration) break;
-      const path = k % currentTiming.beats.length === 0 ? loop : grid;
-      path.moveTo(at(t), k % currentTiming.beats.length === 0 ? 0 : h * 0.62);
-      path.lineTo(at(t), h);
+      const x = at(t);
+      if (k % currentTiming.beats.length === 0) {
+        loop.moveTo(x, 0);
+        loop.lineTo(x, h);
+        if (caps) loopCaps.rect(x - 3, 0, 6, 6);
+      } else {
+        grid.moveTo(x, h * 0.62);
+        grid.lineTo(x, h);
+      }
     }
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
     ctx.strokeStyle = css.getPropertyValue("--grid");
     ctx.stroke(grid);
+    ctx.setLineDash([]);
+    ctx.lineWidth = 1;
     ctx.strokeStyle = css.getPropertyValue("--loop");
     ctx.stroke(loop);
+    ctx.fillStyle = css.getPropertyValue("--loop");
+    ctx.fill(loopCaps);
   }
 
+  const beatLines = new Path2D(), flags = new Path2D();
+  for (const t of state.audioBeats) {
+    const x = at(t);
+    beatLines.moveTo(x, 0);
+    beatLines.lineTo(x, h * 0.4);
+    // a flag on the very first beat would otherwise hang off the left edge
+    const fx = Math.min(Math.max(x, 4), w - 4);
+    flags.moveTo(fx - 4, 0);
+    flags.lineTo(fx + 4, 0);
+    flags.lineTo(fx, 7);
+    flags.closePath();
+  }
   ctx.strokeStyle = css.getPropertyValue("--accent");
   ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (const t of state.audioBeats) { ctx.moveTo(at(t), 0); ctx.lineTo(at(t), h * 0.4); }
-  ctx.stroke();
+  ctx.stroke(beatLines);
+  ctx.fillStyle = css.getPropertyValue("--accent");
+  ctx.fill(flags);
 
   if (playheadSeconds !== null) {
     ctx.strokeStyle = css.getPropertyValue("--ink");
@@ -487,6 +755,7 @@ $("wave").onclick = (e) => {
   const tolerance = (8 / box.width) * duration;
   const near = state.audioBeats.findIndex((b) => Math.abs(b - t) < tolerance);
   if (near >= 0) {
+    rememberBeats();
     state.audioBeats.splice(near, 1);
     setTempoFromBeats();
     refresh();
@@ -496,6 +765,7 @@ $("wave").onclick = (e) => {
 };
 
 function addAudioBeat(seconds) {
+  rememberBeats();
   state.audioBeats.push(seconds);
   state.audioBeats.sort((a, b) => a - b);
   setTempoFromBeats();
@@ -509,9 +779,21 @@ function setTempoFromBeats() {
   $("bpm").value = (60 / (span / (state.audioBeats.length - 1))).toFixed(1);
 }
 
-$("clearBeatsBtn").onclick = () => { state.audioBeats = []; refresh(); };
+$("clearBeatsBtn").onclick = () => {
+  rememberBeats();
+  state.audioBeats = [];
+  refresh();
+};
 
-wireDrop("audioDrop", "audioInput", (f) => loadAudio(f).catch(fail));
+$("undoBeatBtn").onclick = () => {
+  if (!beatHistory.length) return;
+  const previous = beatHistory.pop();
+  state.audioBeats = previous.beats;
+  $("bpm").value = previous.bpm;
+  refresh();
+};
+
+wireDrop("audioDrop", "audioInput", loadAudio);
 
 /* ------------------------------------------------------------------ playback */
 
@@ -524,15 +806,27 @@ function startPlayback() {
   actx.resume();
 
   const from = downbeat();
+  const span = state.audioBuffer.duration - from;
+  if (!(span > 0)) {
+    fail(new Error("The downbeat is at the very end of the song, so there is nothing to play."));
+    return;
+  }
+
   const source = actx.createBufferSource();
   source.buffer = state.audioBuffer;
   source.connect(actx.destination);
+
+  // Round and round from the downbeat to the end of the song, so a run of the animation
+  // can be watched over and over without reaching for the button between each one
+  source.loop = true;
+  source.loopStart = from;
+  source.loopEnd = state.audioBuffer.duration;
 
   const t0 = actx.currentTime + 0.08;
   source.start(t0, from);
   source.onended = () => { if (playback?.source === source) stopPlayback(); };
 
-  playback = { source, t0, from, clicks: [], nextClick: t0, raf: 0 };
+  playback = { source, t0, from, span, clicks: [], nextCycle: 0, nextBeat: 0, raf: 0 };
   playback.raf = requestAnimationFrame(tickPlayback);
   syncTransport();
 }
@@ -552,10 +846,14 @@ function tickPlayback() {
   const elapsed = actx.currentTime - playback.t0;
 
   if (elapsed >= 0) {
-    drawWave(playback.from + elapsed);
+    // the source jumps back to the downbeat at the end of the song, so the playhead and
+    // the animation wrap with it rather than running off past the end
+    const pos = elapsed % playback.span;
+
+    drawWave(playback.from + pos);
     // currentTiming is read fresh every frame, so a tempo change lands immediately
     if (currentTiming) {
-      const ms = elapsed * 1000;
+      const ms = pos * 1000;
       const inLoop = ms % currentTiming.loopMs;
       let i = currentTiming.onsets.findIndex((o) => o > inLoop) - 1;
       if (i < 0) i = currentTiming.durations.length - 1;
@@ -564,8 +862,8 @@ function tickPlayback() {
       const ctx = $("previewCanvas").getContext("2d");
       ctx.clearRect(0, 0, state.width, state.height);
       ctx.drawImage(state.frames[frame], 0, 0);
-      $("previewPos").textContent =
-        `${(ms / 1000).toFixed(2)}s · beat ${Math.floor(ms / currentTiming.msPerBeat) + 1} · frame ${frame}`;
+      $("previewPos").innerHTML =
+        `Beat <b>${Math.floor(ms / currentTiming.msPerBeat) + 1}</b>, ${(ms / 1000).toFixed(1)}s in`;
     }
     pumpClicks();
   }
@@ -591,26 +889,41 @@ $("tapBeatBtn").onclick = tapBeat;
 
 /* -------------------------------------------------------------- click track */
 
-// Scheduled a fraction of a second ahead rather than all at once, so changing the tempo
-// mid-play can drop the clicks that have not sounded yet and re-lay them on the new grid
+// Beat k of pass c through the song sounds at t0 + c*span + k*step. Scheduled a fraction
+// of a second ahead rather than all at once, so changing the tempo mid-play can drop the
+// clicks that have not sounded yet and re-lay them on the new grid — and so the grid can
+// start over at the downbeat on every pass instead of drifting on across the seam.
 function pumpClicks() {
   if (!$("clickTrack").checked) return;
 
   const msPerBeat = getMsPerBeat();
   if (!msPerBeat) return;
 
-  while (playback.nextClick < actx.currentTime + 0.4) {
-    if (playback.nextClick > actx.currentTime) {
+  const step = msPerBeat / 1000;
+  const horizon = actx.currentTime + 0.4;
+
+  while (true) {
+    const cycleStart = playback.t0 + playback.nextCycle * playback.span;
+    const at = cycleStart + playback.nextBeat * step;
+
+    if (at >= cycleStart + playback.span) {
+      playback.nextCycle++;
+      playback.nextBeat = 0;
+      continue;
+    }
+    if (at >= horizon) break;
+
+    if (at > actx.currentTime) {
       const osc = actx.createOscillator(), gain = actx.createGain();
       osc.frequency.value = 1500;
-      gain.gain.setValueAtTime(0.07, playback.nextClick);
-      gain.gain.exponentialRampToValueAtTime(0.001, playback.nextClick + 0.04);
+      gain.gain.setValueAtTime(0.07, at);
+      gain.gain.exponentialRampToValueAtTime(0.001, at + 0.04);
       osc.connect(gain).connect(actx.destination);
-      osc.start(playback.nextClick);
-      osc.stop(playback.nextClick + 0.05);
-      playback.clicks.push({ osc, at: playback.nextClick });
+      osc.start(at);
+      osc.stop(at + 0.05);
+      playback.clicks.push({ osc, at });
     }
-    playback.nextClick += msPerBeat / 1000;
+    playback.nextBeat++;
   }
 
   playback.clicks = playback.clicks.filter((c) => c.at > actx.currentTime - 1);
@@ -628,10 +941,10 @@ function retimeClicks() {
   const msPerBeat = getMsPerBeat();
   if (!msPerBeat) return;
 
-  const origin = playback.t0 + (downbeat() - playback.from);
   const step = msPerBeat / 1000;
-  const passed = Math.max(0, Math.ceil((actx.currentTime + 0.05 - origin) / step));
-  playback.nextClick = origin + passed * step;
+  const elapsed = Math.max(0, actx.currentTime + 0.05 - playback.t0);
+  playback.nextCycle = Math.floor(elapsed / playback.span);
+  playback.nextBeat = Math.ceil((elapsed - playback.nextCycle * playback.span) / step);
 }
 
 /* --------------------------------------------------------------------- tempo */
@@ -646,7 +959,7 @@ $("tapBtn").onclick = () => {
     $("bpm").value = (60000 / (span / (taps.length - 1))).toFixed(1);
     refresh();
   }
-  $("tapBtn").textContent = taps.length > 1 ? `Tap (${taps.length})` : "Tap";
+  $("tapBtn").textContent = taps.length > 1 ? `Tap the tempo (${taps.length})` : "Tap the tempo";
 };
 
 /* ------------------------------------------------------------ tempo estimate */
@@ -808,7 +1121,7 @@ async function estimateBpm(buffer, onProgress = () => {}) {
   const SLICE = 128;
   for (let f = 0; f < total; f += SLICE) {
     mel.push(...melSpectrogram(mono, f, SLICE));
-    onProgress(`analysing ${Math.round((100 * mel.length) / total)}%`);
+    onProgress(`Listening to the song… ${Math.round((100 * mel.length) / total)}%`);
     await new Promise((r) => setTimeout(r, 0));
   }
 
@@ -836,14 +1149,14 @@ async function estimateBpm(buffer, onProgress = () => {}) {
     input.dispose();
     output.dispose();
     patches++;
-    onProgress(`matching tempo, window ${patches}`);
+    onProgress("Working out the tempo…");
     await new Promise((r) => setTimeout(r, 0));
   }
 
   let best = 0;
   for (let i = 1; i < 256; i++) if (votes[i] > votes[best]) best = i;
   // the softmax runs from 30 BPM up
-  return { bpm: best + 30, confidence: votes[best] / patches, patches };
+  return { bpm: best + 30, confidence: votes[best] / patches };
 }
 
 $("estimateBtn").onclick = async () => {
@@ -851,23 +1164,29 @@ $("estimateBtn").onclick = async () => {
   if (!state.audioBuffer) return;
 
   button.disabled = true;
-  button.textContent = "Estimating…";
+  button.textContent = "Listening…";
   try {
-    const { bpm, confidence, patches } = await estimateBpm(
+    const { bpm, confidence } = await estimateBpm(
       state.audioBuffer, (note) => { $("estimateNote").textContent = note; });
     $("bpm").value = bpm.toFixed(1);
-    $("estimateNote").textContent =
-      `${bpm} BPM from ${patches} window${patches > 1 ? "s" : ""}, confidence ${confidence.toFixed(2)}`;
+    $("estimateNote").innerHTML = `Sounds like <b>${bpm} BPM</b>.` +
+      // the model always names a tempo; when the vote is this split it is often the wrong one
+      (confidence < 0.5 ? ` <span class="warn">It is not sure though, so play it back and check.</span>` : "");
     refresh();
   } catch (err) {
     $("estimateNote").textContent = err.message.includes("Failed to fetch")
-      ? "Could not load the tempo model. It needs the page to be served, and a network connection the first time."
+      ? "Could not load the tempo model. It needs a network connection the first time."
       : err.message;
   } finally {
     button.disabled = false;
-    button.textContent = "Estimate";
+    button.textContent = "Find the tempo";
   }
 };
+
+if (!SERVED) {
+  $("estimateBtn").disabled = true;
+  $("estimateNote").textContent = NEEDS_SERVING;
+}
 
 // BPM is the song's tempo; hits is how often the animation lands against it
 function getMsPerBeat() {
@@ -905,18 +1224,26 @@ function computeTiming() {
 function refresh() {
   const ready = { gif: state.frames.length > 0, audio: !!state.audioBuffer };
 
-  $("framePos").textContent = ready.gif ? `frame ${state.cur} of ${state.frames.length - 1}` : "";
-  $("markBtn").textContent = state.beats.has(state.cur) ? "Unmark beat (space)" : "Mark beat (space)";
+  $("framePos").innerHTML = ready.gif ? `Frame <b>${state.cur + 1}</b> of ${state.frames.length}` : "";
+  $("markBtn").textContent = state.beats.has(state.cur) ? "Unmark this frame (space)" : "Mark this frame (space)";
 
   [...$("strip").children].forEach((c, i) => {
     c.classList.toggle("cur", i === state.cur);
     c.classList.toggle("beat", state.beats.has(i));
   });
 
+  $("undoMarkBtn").disabled = !markHistory.length;
+  $("undoBeatBtn").disabled = !beatHistory.length;
+
+  buildBeatStrip();
+  for (const item of $("beatStrip").children) {
+    item.classList.toggle("cur", Number(item.dataset.frame) === state.cur);
+  }
+
   const beats = [...state.beats].sort((a, b) => a - b);
   $("beatList").innerHTML = beats.length
-    ? `beat frames <b>${beats.join(" ")}</b>`
-    : "no beat frames marked";
+    ? `<b>${beats.length}</b> frame${beats.length > 1 ? "s" : ""} marked: the beat lands on each of them in turn.`
+    : "No frames marked yet. Step through the GIF and mark the ones the beat should land on.";
 
   currentTiming = null;
   let problem = "";
@@ -925,8 +1252,8 @@ function refresh() {
   if (ready.audio) {
     const marks = state.audioBeats.length;
     $("audioSummary").innerHTML = marks
-      ? `<b>${marks}</b> beat mark${marks > 1 ? "s" : ""} · downbeat <b>${downbeat().toFixed(3)}s</b>`
-      : "click the waveform to mark the beats of the song";
+      ? `<b>${marks}</b> beat${marks > 1 ? "s" : ""} marked. The video starts at <b>${downbeat().toFixed(2)}s</b>, on the first of them.`
+      : "Click the waveform where you hear a beat, or press B along to the music.";
     drawWave(playback ? playback.from + Math.max(0, actx.currentTime - playback.t0) : null);
   }
 
@@ -934,17 +1261,40 @@ function refresh() {
   if (currentTiming) {
     const short = currentTiming.durations.filter((d) => d < MIN_VISIBLE_MS).length;
     $("timingSummary").innerHTML =
-      `beat <b>${currentTiming.msPerBeat.toFixed(1)}ms</b> · loop <b>${beats.length}</b> beats, ` +
-      `<b>${(currentTiming.loopMs / 1000).toFixed(2)}s</b> · shortest frame ` +
-      `<b>${Math.min(...currentTiming.durations).toFixed(1)}ms</b>` +
-      (short ? `<br><span class="warn">${short} frame${short > 1 ? "s" : ""} shorter than one ` +
-        `frame of a 60Hz display, so they will flash past rather than read.</span>` : "");
+      `Your GIF loops every <b>${(currentTiming.loopMs / 1000).toFixed(2)}s</b>, ` +
+      `covering <b>${beats.length}</b> beat${beats.length > 1 ? "s" : ""} of the song.` +
+      (short ? `<br><span class="warn">${short} frame${short > 1 ? "s are" : " is"} too quick to see at ` +
+        `this tempo, and will flash past rather than read.</span>` : "");
   }
 
-  $("secSync").toggleAttribute("data-off", !ready.audio);
   $("previewCanvas").hidden = !ready.gif;
+  $("previewEmpty").hidden = ready.gif;
+  $("resultEmpty").hidden = rendered;
   syncTransport();
-  $("secRender").toggleAttribute("data-off", !(currentTiming && ready.audio));
+
+  const missing = !ready.gif && !ready.audio ? "Add a GIF and a song first."
+    : !ready.gif ? "Add a GIF first."
+    : !ready.audio ? "Add a song first." : "";
+
+  const steps = [
+    { id: "secGif", done: ready.gif && state.beats.size > 0, why: "" },
+    { id: "secAudio", done: ready.audio && state.audioBeats.length > 0, why: "" },
+    { id: "secSync", done: !!currentTiming, why: missing },
+    { id: "secRender", done: rendered,
+      why: missing || (currentTiming ? "" : "Mark a beat frame in your GIF first.") },
+  ];
+
+  // Point at the first step still to do, so there is always one obvious place to look
+  const current = steps.findIndex((s) => !s.done && !s.why);
+  steps.forEach((s, i) => {
+    // a locked step cannot also be finished, whatever its own condition says
+    const done = s.done && !s.why;
+    $(s.id).classList.toggle("is-locked", !!s.why);
+    $(s.id).classList.toggle("is-done", done);
+    $(s.id).classList.toggle("is-current", i === current);
+    $(s.id + "Why").textContent = s.why;
+    $(s.id + "Chip").textContent = done ? "Done" : "";
+  });
 
   // Tempo changes take effect on the running preview; moving the downbeat has to
   // restart it, since that is where the audio is playing from
@@ -963,11 +1313,24 @@ function log(line) {
   $("log").scrollTop = $("log").scrollHeight;
 }
 
+// One line of plain progress, with the running commentary folded away under the log
+function status(line) {
+  $("renderStatus").textContent = line;
+}
+
 function fail(err) {
   console.error(err);
   log(`ERROR ${err.message}`);
-  alert(err.message);
+  $("errorText").textContent = err.message;
+  $("error").hidden = false;
+  $("error").scrollIntoView({ block: "nearest" });
 }
+
+function clearError() {
+  $("error").hidden = true;
+}
+
+$("errorClose").onclick = clearError;
 
 /* --------------------------------------------------------------------- mp4 */
 // A small MP4 writer. The point of writing one rather than pulling a library in is that
@@ -1237,7 +1600,10 @@ async function encodeVideo(schedule, width, height) {
     if (encoder.encodeQueueSize > 24) {
       await new Promise((r) => { encoder.ondequeue = r; });
     }
-    if (i % 200 === 0) log(`  video ${i}/${schedule.length} frames`);
+    if (i % 200 === 0) {
+      log(`  video ${i}/${schedule.length} frames`);
+      status(`Drawing the video… ${Math.round((100 * i) / schedule.length)}%`);
+    }
     if (failure) throw failure;
   }
 
@@ -1401,13 +1767,27 @@ function readOpusPreSkip(description) {
   return description[10] | (description[11] << 8);
 }
 
-function offerDownload(blob, filename) {
+// A finished video belongs to the files it was made from, so a new one retires it
+function clearRender() {
+  rendered = false;
+  $("log").textContent = "";
+  status("");
   const link = $("download");
   if (link.href) URL.revokeObjectURL(link.href);
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.textContent = `Download ${filename} (${(blob.size / 1e6).toFixed(1)}MB)`;
-  link.hidden = false;
+  link.removeAttribute("href");
+  // the player has to let go of the url too, or it holds one that has been revoked
+  $("resultVideo").removeAttribute("src");
+  $("resultVideo").load();
+  $("result").hidden = true;
+}
+
+function offerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  $("download").href = url;
+  $("download").download = filename;
+  $("resultVideo").src = url;
+  $("resultInfo").textContent = `${filename} · ${(blob.size / 1e6).toFixed(1)}MB`;
+  $("result").hidden = false;
 }
 
 function outputName() {
@@ -1421,8 +1801,8 @@ $("renderBrowserBtn").onclick = async () => {
   if (!timing) return;
 
   button.disabled = true;
-  $("log").textContent = "";
-  $("download").hidden = true;
+  clearError();
+  clearRender();
 
   try {
     const seconds = state.audioBuffer.duration - downbeat();
@@ -1432,19 +1812,25 @@ $("renderBrowserBtn").onclick = async () => {
 
     const schedule = buildSchedule(timing, seconds);
     log(`Rendering ${schedule.length} frames over ${seconds.toFixed(2)}s at ${width}×${height}`);
+    status("Drawing the video… 0%");
 
     const video = await encodeVideo(schedule, width, height);
     log(`  video done, ${video.samples.length} samples`);
+    status("Adding the song…");
 
     const audio = await encodeAudio(seconds);
     log(`  audio done, ${audio.codec}, ${audio.samples.length} samples, ` +
         `${audio.preSkip} samples of encoder priming skipped`);
 
     offerDownload(buildMp4(video, audio), outputName());
+    rendered = true;
+    refresh();
     log("Done.");
+    status("");
   } catch (err) {
     fail(err);
   } finally {
+    status("");
     button.disabled = false;
   }
 };
