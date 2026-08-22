@@ -8,14 +8,14 @@
 :root {
   --bg: #ffffff; --panel: #f4f4f5; --line: #d9d9de; --ink: #18181b;
   --dim: #6b6b76; --accent: #d6336c; --accent-ink: #ffffff; --ok: #1a7f4b;
-  --grid: #7595c4; --loop: #1d4ed8;
+  --grid: #0f766e; --loop: #c2410c;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #131316; --panel: #1c1c21; --line: #33333c; --ink: #ececf0;
     --dim: #9a9aa6; --accent: #f06595; --accent-ink: #1a1a1f; --ok: #4ade80;
-    --grid: #5f7ba3; --loop: #60a5fa;
+    --grid: #2dd4bf; --loop: #fb923c;
   }
 }
 * { box-sizing: border-box; }
@@ -123,14 +123,14 @@ a#download[hidden] { display: none; }
   <div id="audioBody" hidden>
     <canvas id="wave"></canvas>
     <div class="row">
-      <button id="songPlayBtn">Play song</button>
+      <button id="tapBeatBtn">Tap a beat (B)</button>
       <button id="clearBeatsBtn">Clear beat marks</button>
       <span class="mono" id="audioSummary"></span>
     </div>
     <div class="row"><span class="mono">
-      <span class="key k-mark"></span> beat marks
-      &nbsp; <span class="key k-grid"></span> where beat frames land
-      &nbsp; <span class="key k-loop"></span> loop start
+      <span class="key k-mark"></span> beats you marked in the song
+      &nbsp; <span class="key k-grid"></span> where the gif's beat frames land
+      &nbsp; <span class="key k-loop"></span> where the gif's loop restarts
     </span></div>
   </div>
 </section>
@@ -328,7 +328,7 @@ function buildStrip() {
 function drawFrame() {
   for (const id of ["frameCanvas", "previewCanvas"]) {
     // The preview canvas tracks the selected frame while it is idle, so it is never blank
-    if (id === "previewCanvas" && playback?.mode === "preview") continue;
+    if (id === "previewCanvas" && playback) continue;
     const ctx = $(id).getContext("2d");
     ctx.clearRect(0, 0, state.width, state.height);
     ctx.drawImage(state.frames[state.cur], 0, 0);
@@ -470,18 +470,28 @@ $("wave").onclick = (e) => {
   // Clicking an existing mark takes it away again
   const tolerance = (8 / box.width) * duration;
   const near = state.audioBeats.findIndex((b) => Math.abs(b - t) < tolerance);
-  if (near >= 0) state.audioBeats.splice(near, 1);
-  else state.audioBeats.push(t);
-  state.audioBeats.sort((a, b) => a - b);
-
-  // Two or more marks give the tempo, on the assumption they are consecutive beats
-  if (state.audioBeats.length > 1) {
-    const span = state.audioBeats[state.audioBeats.length - 1] - state.audioBeats[0];
-    $("bpm").value = (60 / (span / (state.audioBeats.length - 1))).toFixed(1);
+  if (near >= 0) {
+    state.audioBeats.splice(near, 1);
+    setTempoFromBeats();
+    refresh();
+  } else {
+    addAudioBeat(t);
   }
-
-  refresh();
 };
+
+function addAudioBeat(seconds) {
+  state.audioBeats.push(seconds);
+  state.audioBeats.sort((a, b) => a - b);
+  setTempoFromBeats();
+  refresh();
+}
+
+// Two or more marks give the tempo, on the assumption they are consecutive beats
+function setTempoFromBeats() {
+  if (state.audioBeats.length < 2) return;
+  const span = state.audioBeats[state.audioBeats.length - 1] - state.audioBeats[0];
+  $("bpm").value = (60 / (span / (state.audioBeats.length - 1))).toFixed(1);
+}
 
 $("clearBeatsBtn").onclick = () => { state.audioBeats = []; refresh(); };
 
@@ -493,11 +503,11 @@ wireDrop("audioDrop", "audioInput", (f) => loadAudio(f).catch(fail));
 // so the two can never end up playing at once
 let playback = null;
 
-function startPlayback(mode) {
+function startPlayback() {
   stopPlayback();
   actx.resume();
 
-  const from = mode === "preview" ? downbeat() : 0;
+  const from = downbeat();
   const source = actx.createBufferSource();
   source.buffer = state.audioBuffer;
   source.connect(actx.destination);
@@ -506,7 +516,7 @@ function startPlayback(mode) {
   source.start(t0, from);
   source.onended = () => { if (playback?.source === source) stopPlayback(); };
 
-  playback = { source, t0, from, mode, clicks: [], nextClick: t0 + (downbeat() - from), raf: 0 };
+  playback = { source, t0, from, clicks: [], nextClick: t0, raf: 0 };
   playback.raf = requestAnimationFrame(tickPlayback);
   syncTransport();
 }
@@ -528,7 +538,7 @@ function tickPlayback() {
   if (elapsed >= 0) {
     drawWave(playback.from + elapsed);
     // currentTiming is read fresh every frame, so a tempo change lands immediately
-    if (playback.mode === "preview" && currentTiming) {
+    if (currentTiming) {
       const ms = elapsed * 1000;
       const inLoop = ms % currentTiming.loopMs;
       let i = currentTiming.onsets.findIndex((o) => o > inLoop) - 1;
@@ -548,14 +558,20 @@ function tickPlayback() {
 }
 
 function syncTransport() {
-  $("songPlayBtn").textContent = playback?.mode === "song" ? "Stop" : "Play song";
-  $("previewBtn").textContent = playback?.mode === "preview" ? "Stop preview" : "Play preview";
+  $("previewBtn").textContent = playback ? "Stop" : "Play preview";
+  $("tapBeatBtn").disabled = !playback;
 }
 
-$("songPlayBtn").onclick = () =>
-  playback?.mode === "song" ? stopPlayback() : startPlayback("song");
-$("previewBtn").onclick = () =>
-  playback?.mode === "preview" ? stopPlayback() : startPlayback("preview");
+$("previewBtn").onclick = () => (playback ? stopPlayback() : startPlayback());
+
+// Tapping along while it plays is the quick way to get the beats down; clicking the
+// waveform is the way to nudge one into exactly the right place afterwards
+function tapBeat() {
+  if (!playback) return;
+  addAudioBeat(playback.from + Math.max(0, actx.currentTime - playback.t0));
+}
+
+$("tapBeatBtn").onclick = tapBeat;
 
 /* -------------------------------------------------------------- click track */
 
@@ -571,7 +587,7 @@ function pumpClicks() {
     if (playback.nextClick > actx.currentTime) {
       const osc = actx.createOscillator(), gain = actx.createGain();
       osc.frequency.value = 1500;
-      gain.gain.setValueAtTime(0.25, playback.nextClick);
+      gain.gain.setValueAtTime(0.07, playback.nextClick);
       gain.gain.exponentialRampToValueAtTime(0.001, playback.nextClick + 0.04);
       osc.connect(gain).connect(actx.destination);
       osc.start(playback.nextClick);
@@ -716,18 +732,16 @@ function refresh() {
         `${CONCAT_TIMEBASE_MS}ms — exact here, rounded by the sync.py path.</span>` : "");
   }
 
-  $("secSync").toggleAttribute("data-off", !(ready.gif && ready.audio));
-  $("previewBtn").disabled = !currentTiming;
+  $("secSync").toggleAttribute("data-off", !ready.audio);
+  $("previewCanvas").hidden = !ready.gif;
+  syncTransport();
   $("secRender").toggleAttribute("data-off", !(currentTiming && ready.audio));
 
   // Tempo changes take effect on the running preview; moving the downbeat has to
   // restart it, since that is where the audio is playing from
   if (playback) {
-    if (playback.mode === "preview" && Math.abs(playback.from - downbeat()) > 1e-9) {
-      startPlayback("preview");
-    } else {
-      retimeClicks();
-    }
+    if (Math.abs(playback.from - downbeat()) > 1e-9) startPlayback();
+    else retimeClicks();
   }
 
   return currentTiming;
