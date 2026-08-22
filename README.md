@@ -18,21 +18,30 @@ x [Epik High - 낙화 (落花) {The Falling Flower}](https://www.youtube.com/wat
 
 ## Beat marker
 
-`docs/index.html` is a page for picking the beat frames without counting them by hand. Drop a GIF in,
-step through the frames, mark the ones the beat should land on, drop a song in and click its first
-downbeat on the waveform, then preview the two together before rendering.
+`docs/index.html` is a page for lining a GIF up against a song by eye and ear rather than by
+counting frames. Drop a GIF in and mark the frames the beat should land on. Drop a song in and
+click its beats on the waveform: the first click is the downbeat the animation starts from, and two
+or more give the tempo. The waveform then shows where every beat frame will land, and the preview
+plays the retimed animation over the song. Changing the tempo while it is playing re-times the
+animation and the click track underneath it, so you can nudge the BPM until it locks.
 
-Open the file directly and it renders the mp4 itself, using WebCodecs. Serve it with
+BPM is the song's tempo. **Animation hits** is a separate thing: how often the GIF lands against
+that tempo, so `twice a beat` runs the animation at double speed without pretending the song is
+faster than it is. It is `--tempo_multiplier` under a name that says what it does.
+
+Opened straight off the filesystem the page renders the mp4 itself, using WebCodecs. Served with
 
     python marker.py
 
-and it also offers to render through `sync.py`, trimming the audio to the downbeat first, and to
+it also offers to render through `sync.py`, trimming the audio to the downbeat first, and to
 estimate the tempo with essentia. From inside the container use `python marker.py --host 0.0.0.0`
 and open <http://localhost:5000>.
 
-The two renderers agree on the retiming — `node docs/test_timing.mjs` checks the page's copy against
-`sync.py` — but not on the encode. The browser writes exact per-frame timestamps, while `sync.py`
-goes through ffmpeg's concat demuxer and its 40ms grid.
+The page is deployed to GitHub Pages from `docs/` by `.github/workflows/pages.yml`, which runs the
+drift check first: the page carries its own copy of the retiming, and `node docs/test_timing.mjs`
+diffs it against `sync.py` so the two cannot disagree. The encode does differ on purpose — the
+browser writes exact per-frame timestamps, while `sync.py` goes through ffmpeg's concat demuxer and
+its 40ms grid.
 
 ## Usage
 
