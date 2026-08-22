@@ -399,6 +399,7 @@ details.more .row { margin-top: .6rem; }
 
   <div class="row make">
     <button id="renderBrowserBtn" class="primary">Make the video</button>
+    <button id="shareBtn" hidden>Copy a link to this setup</button>
   </div>
   </div>
 </section>
@@ -518,6 +519,8 @@ function remember(history, snapshot) {
 const state = {
   gifFile: null, frames: [], holds: [], width: 0, height: 0, cur: 0, beats: new Set(), credit: null,
   audioFile: null, audioBuffer: null, audioBeats: [], peaks: null,
+  // Where the gif came from, when that is somewhere a link can point back at
+  shareGif: null,
 };
 
 /* ---------------------------------------------------------------- capabilities */
@@ -598,6 +601,7 @@ async function loadGif(file) {
   state.cur = 0;
   state.beats = new Set();
   state.credit = null;
+  state.shareGif = null;
   markHistory.length = 0;
 
   $("gifDrop").textContent = `${file.name} — ${count} frames, ${state.width}×${state.height}. Drop another to replace.`;
@@ -966,8 +970,7 @@ function renderPicker({ found, tooBig }, term) {
     : `Nothing animated found for “${term}”.`;
 }
 
-async function useCommonsGif(item) {
-  $("picker").close();
+async function fetchCommonsGif(item) {
   toast("picker", `Fetching ${item.title} — ${(item.bytes / 1e6).toFixed(1)}MB…`, { stay: true });
   try {
     const response = await fetch(item.url);
@@ -976,10 +979,19 @@ async function useCommonsGif(item) {
     await loadGif(new File([blob], `${item.title}.gif`, { type: "image/gif" }));
 
     state.credit = item;
+    state.shareGif = item.page.replace(/^File:/, "");
     refresh();
+  } finally {
     dismiss("picker");
+  }
+}
+
+// The picker is the one caller that has somewhere to put the error itself
+async function useCommonsGif(item) {
+  $("picker").close();
+  try {
+    await fetchCommonsGif(item);
   } catch (err) {
-    dismiss("picker");
     fail(err);
   }
 }
@@ -1043,6 +1055,7 @@ async function loadExample() {
   state.audioBeats = [...EXAMPLE.songBeats];
   beatsAreEstimates = false;
   $("bpm").value = EXAMPLE.bpm;
+  state.shareGif = "example";
   refresh();
 }
 
@@ -1803,6 +1816,7 @@ function refresh() {
 
   $("undoMarkBtn").disabled = !markHistory.length;
   $("undoBeatBtn").disabled = !beatHistory.length;
+  $("shareBtn").hidden = !state.shareGif;
 
   buildBeatStrip();
   showCurrentFrame();
@@ -2444,8 +2458,121 @@ if ("AudioEncoder" in window) {
   }).catch((err) => { codecWarning = err.message; });
 }
 
+/* --------------------------------------------------------------- deep links */
+
+// A url that opens the page already set up. The song is deliberately not in it — an audio
+// file cannot travel in a link, and every tool of this kind makes you bring your own
+// anyway. What does travel is the gif, by Commons title, since Commons is the one source
+// the page can fetch for itself, and every number on the page.
+//
+// Unknown parameters are left alone rather than refused: a link that has been through a
+// share button somewhere comes back with tracking parameters stuck on the end of it.
+
+const EASE_PARAM = { even: "linear", inout: "quadratic", "inout-more": "cubic" };
+const EASE_NAME = Object.fromEntries(Object.entries(EASE_PARAM).map(([k, v]) => [v, k]));
+const LINK_PARAMS = ["demo", "gif", "bpm", "marks", "ease", "hits"];
+
+async function commonsFileByTitle(title) {
+  const query = new URLSearchParams({
+    action: "query", titles: `File:${title}`,
+    prop: "imageinfo", iiprop: "url|size|mime|extmetadata", iiurlwidth: "200",
+    format: "json", origin: "*",
+  });
+
+  const response = await fetch(`${COMMONS}?${query}`);
+  if (!response.ok) throw new Error(`Commons lookup failed (${response.status}).`);
+  const page = Object.values((await response.json()).query?.pages ?? {})[0];
+  const file = page?.imageinfo?.[0];
+
+  if (!file) throw new Error(`Wikimedia Commons has no file called \u201c${title}\u201d.`);
+  if (file.mime !== "image/gif") throw new Error(`\u201c${title}\u201d on Commons is not a GIF.`);
+
+  const meta = file.extmetadata ?? {};
+  return {
+    title: page.title.replace(/^File:/, "").replace(/\.gif$/i, ""),
+    url: file.url,
+    thumb: file.thumburl,
+    bytes: file.size,
+    author: plainText(meta.Artist?.value) || "unknown author",
+    licence: plainText(meta.LicenseShortName?.value) || "see Commons",
+    page: page.title,
+  };
+}
+
+function linkNumber(params, name, ok) {
+  if (!params.has(name)) return null;
+  const value = Number(params.get(name));
+  if (!Number.isFinite(value) || !ok(value))
+    throw new Error(`\u201c${params.get(name)}\u201d is not a usable ${name} for this link.`);
+  return value;
+}
+
+async function applyLink(params) {
+  if (params.get("demo") === "1") await loadExample();
+  if (params.has("gif")) await fetchCommonsGif(await commonsFileByTitle(params.get("gif")));
+
+  const bpm = linkNumber(params, "bpm", (v) => v > 0 && v < 1000);
+  if (bpm !== null) {
+    $("bpm").value = String(bpm);
+    // A tempo written into a link is somebody's answer, so the estimate still running
+    // behind the example must not land on top of it
+    userSetTempo = true;
+  }
+
+  const hits = linkNumber(params, "hits", (v) => [0.25, 0.5, 1, 2, 4].includes(v));
+  if (hits !== null) $("hits").value = String(hits);
+
+  if (params.has("ease")) {
+    const easing = EASE_PARAM[params.get("ease")];
+    if (!easing) throw new Error(
+      `\u201c${params.get("ease")}\u201d is not one of ${Object.keys(EASE_PARAM).join(", ")}.`);
+    $("interpolation").value = easing;
+  }
+
+  if (params.has("marks")) {
+    const marks = params.get("marks").split(",").map(Number);
+    const bad = marks.some((f) => !Number.isInteger(f) || f < 0 || f >= state.frames.length);
+    if (bad) throw new Error(
+      `This link marks frames the GIF does not have. It has ${state.frames.length}.`);
+    remember(markHistory, state.beats);
+    state.beats = new Set(marks);
+    $("suggestCount").value = marks.length;
+  }
+
+  refresh();
+}
+
+function shareLink() {
+  const params = new URLSearchParams();
+  if (state.shareGif === "example") params.set("demo", "1");
+  else params.set("gif", state.shareGif);
+
+  params.set("bpm", $("bpm").value);
+  params.set("ease", EASE_NAME[$("interpolation").value]);
+  params.set("hits", $("hits").value);
+
+  const marks = [...state.beats].sort((a, b) => a - b);
+  if (marks.length) params.set("marks", marks.join(","));
+
+  return `${location.origin}${location.pathname}?${params}`;
+}
+
+$("shareBtn").onclick = async () => {
+  clearError();
+  try {
+    await navigator.clipboard.writeText(shareLink());
+    toast("share", "Link copied. It brings back the GIF and the settings; " +
+      "whoever opens it picks their own song.");
+  } catch (err) {
+    fail(new Error(`Could not copy the link. ${err.message}`));
+  }
+};
+
 addEventListener("resize", () => { if (state.audioBuffer) refresh(); });
 refresh();
+
+const linkParams = new URLSearchParams(location.search);
+if (LINK_PARAMS.some((name) => linkParams.has(name))) applyLink(linkParams).catch(fail);
 </script>
 </body>
 </html>
