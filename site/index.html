@@ -453,7 +453,7 @@ const $ = (id) => document.getElementById(id);
 const SERVED = location.protocol !== "file:";
 const NEEDS_SERVING = "This needs the page to be served, not opened from a file.";
 
-/* --- timing:start --- pinned by docs/test_timing.mjs against timing_cases.json --- */
+/* --- timing:start --- pinned by test/test_timing.mjs against timing_cases.json --- */
 
 // Frame timestamps are written to the microsecond, so nothing here is rounded. What a
 // viewer cannot see is a frame held for less than one refresh of their display.
@@ -1442,7 +1442,7 @@ $("tapBtn").onclick = () => {
 
 /* ------------------------------------------------------------ tempo estimate */
 
-/* --- tempo:start --- pinned by docs/test_tempo.mjs against tempo_cases.json --- */
+/* --- tempo:start --- pinned by test/test_tempo.mjs against tempo_cases.json --- */
 
 // TempoCNN's front end, matched against essentia's TensorflowInputTempoCNN: 11025Hz mono,
 // 1024-sample frames every 512, Hann, magnitude spectrum, 40 Slaney mel bands over

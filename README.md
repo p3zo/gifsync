@@ -8,7 +8,7 @@ song, and the animation is stretched so the two line up. The output is an mp4 of
 animation with the audio muxed in, looped to the length of the audio.
 
 It runs entirely in the browser — no build, no server, nothing uploaded anywhere:
-**<https://p3zo.github.io/gifsync/>**, or open [docs/index.html](docs/index.html) off disk. The page
+**<https://p3zo.github.io/gifsync/>**, or open [site/index.html](site/index.html) off disk. The page
 explains how to use it; this file is about how it works.
 
 ### [Demo 1](./demo/gypsy_alien.mp4)
@@ -65,7 +65,7 @@ back to the start. Ten beats over those 20 frames is even the whole way round. A
 has no divisor worth moving to, so it keeps the count it was given and the unevenness stands.
 
 Tempo estimation runs the [TempoCNN](https://essentia.upf.edu/models.html#tempocnn) model in
-`docs/tempocnn/` through TensorFlow.js. Its front end — 11025Hz mono, 1024-sample frames every 512,
+`site/tempocnn/` through TensorFlow.js. Its front end — 11025Hz mono, 1024-sample frames every 512,
 Hann, magnitude spectrum, 40 Slaney mel bands over 20-5000Hz with unit-triangle normalisation — was
 matched against essentia's `TensorflowInputTempoCNN` to a relative error of 1.5e-7, and gives the
 same answer essentia does on both demo tracks.
@@ -94,11 +94,11 @@ parsed detached from the page and only its text is used.
 
 ## Development
 
-    node docs/test_timing.mjs
-    node docs/test_tempo.mjs
+    node test/test_timing.mjs
+    node test/test_tempo.mjs
 
 pull the retiming and the tempo front end out of the page and check them against
-`docs/timing_cases.json` and `docs/tempo_cases.json`. Both fixtures were recorded from the Python
+`test/timing_cases.json` and `test/tempo_cases.json`. Both fixtures were recorded from the Python
 this tool replaced — the retiming from `sync.py`, the mel features from essentia — while it was
 still in the tree, so the page stays pinned to what those produced rather than to whatever it does
 today. The Pages workflow runs both before deploying.
