@@ -96,5 +96,5 @@ today. The Pages workflow runs both before deploying.
   play. Chrome and Safari produce AAC. The page says which you are getting.
 - **Transparency is not preserved.**
 - **Finding the tempo needs the page served**, not opened off the filesystem, and a network
-  connection the first time so TensorFlow.js can load. *Try an example* needs the page served too,
-  for the same reason, and says so. Everything else works offline from a file.
+  connection the first time so TensorFlow.js can load. *Try an example* needs it served for the same
+  reason. Off a `file://` url both are disabled and say why; everything else works from a file.

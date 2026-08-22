@@ -293,6 +293,11 @@ details.more .row { margin-top: .6rem; }
 
 const $ = (id) => document.getElementById(id);
 
+// fetch reaches nothing when the page is opened straight off the disk, which rules out
+// the example files and the tempo model. Everything else works from a file:// url.
+const SERVED = location.protocol !== "file:";
+const NEEDS_SERVING = "This needs the page to be served, not opened from a file.";
+
 /* --- timing:start --- pinned by docs/test_timing.mjs against timing_cases.json --- */
 
 // Frame timestamps are written to the microsecond, so nothing here is rounded. What a
@@ -589,10 +594,9 @@ $("exampleBtn").onclick = async () => {
   }
 };
 
-// fetch cannot reach the example files when the page is opened straight off the disk
-if (location.protocol === "file:") {
+if (!SERVED) {
   $("exampleBtn").disabled = true;
-  $("exampleNote").textContent = "The example needs the page to be served, not opened from a file.";
+  $("exampleNote").textContent = NEEDS_SERVING;
 }
 
 /* ---------------------------------------------------------------------- audio */
@@ -605,7 +609,7 @@ async function loadAudio(file) {
   stopPlayback();
   clearRender();
   // the previous song's tempo estimate does not describe this one
-  $("estimateNote").textContent = "";
+  $("estimateNote").textContent = SERVED ? "" : NEEDS_SERVING;
   $("audioDrop").textContent = `Decoding ${file.name}…`;
 
   const bytes = await file.arrayBuffer();
@@ -626,7 +630,7 @@ async function loadAudio(file) {
 
   // Fetching the tempo model is most of the wait on a first estimate, so start it now
   // rather than when the button is pressed. Nothing here depends on it arriving.
-  loadTempoModel().catch(() => {});
+  if (SERVED) loadTempoModel().catch(() => {});
 
   refresh();
 }
@@ -1140,13 +1144,18 @@ $("estimateBtn").onclick = async () => {
     refresh();
   } catch (err) {
     $("estimateNote").textContent = err.message.includes("Failed to fetch")
-      ? "Could not load the tempo model. It needs the page to be served, and a network connection the first time."
+      ? "Could not load the tempo model. It needs a network connection the first time."
       : err.message;
   } finally {
     button.disabled = false;
     button.textContent = "Find the tempo";
   }
 };
+
+if (!SERVED) {
+  $("estimateBtn").disabled = true;
+  $("estimateNote").textContent = NEEDS_SERVING;
+}
 
 // BPM is the song's tempo; hits is how often the animation lands against it
 function getMsPerBeat() {
