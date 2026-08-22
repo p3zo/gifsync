@@ -119,6 +119,9 @@ input[type=number] { width: 6rem; }
 #log:empty { display: none; }
 a#download { display: inline-block; margin-top: .75rem; color: var(--accent); font-weight: 600; }
 a#download[hidden] { display: none; }
+details.more > summary { cursor: pointer; width: fit-content; font-size: .8rem; color: var(--dim); }
+details.more > summary:hover { color: var(--ink); }
+details.more .row { margin-top: .6rem; }
 #unsupported { border-color: var(--accent); }
 </style>
 </head>
@@ -201,11 +204,13 @@ a#download[hidden] { display: none; }
     <span class="say" id="previewPos"></span>
   </div>
   <div class="row">
-    <label>BPM <input type="number" id="bpm" step="0.1" min="1" value="120"></label>
-    <button id="tapBtn">Tap</button>
-    <button id="estimateBtn">Estimate</button>
+    <label>Tempo (BPM) <input type="number" id="bpm" step="0.1" min="1" value="120"></label>
+    <button id="tapBtn">Tap the tempo</button>
+    <button id="estimateBtn">Find the tempo</button>
     <span class="say" id="estimateNote"></span>
-    <label>Animation hits
+  </div>
+  <div class="row">
+    <label>The GIF hits
       <select id="hits">
         <option value="0.25">every 4 beats</option>
         <option value="0.5">every 2 beats</option>
@@ -214,15 +219,20 @@ a#download[hidden] { display: none; }
         <option value="4">four times a beat</option>
       </select>
     </label>
-    <label>Easing
-      <select id="interpolation">
-        <option value="linear">linear</option>
-        <option value="quadratic">quadratic</option>
-        <option value="cubic">cubic</option>
-      </select>
-    </label>
-    <label><input type="checkbox" id="clickTrack"> Click track</label>
   </div>
+  <details class="more">
+    <summary>More options</summary>
+    <div class="row">
+      <label>Between beats
+        <select id="interpolation">
+          <option value="linear">even</option>
+          <option value="quadratic">ease in and out</option>
+          <option value="cubic">ease in and out more</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="clickTrack"> Play a click on each beat</label>
+    </div>
+  </details>
   <div class="row"><span class="say" id="timingSummary"></span></div>
   </div>
 </section>
@@ -766,7 +776,7 @@ $("tapBtn").onclick = () => {
     $("bpm").value = (60000 / (span / (taps.length - 1))).toFixed(1);
     refresh();
   }
-  $("tapBtn").textContent = taps.length > 1 ? `Tap (${taps.length})` : "Tap";
+  $("tapBtn").textContent = taps.length > 1 ? `Tap the tempo (${taps.length})` : "Tap the tempo";
 };
 
 /* ------------------------------------------------------------ tempo estimate */
@@ -971,7 +981,7 @@ $("estimateBtn").onclick = async () => {
   if (!state.audioBuffer) return;
 
   button.disabled = true;
-  button.textContent = "Estimating…";
+  button.textContent = "Listening…";
   try {
     const { bpm, confidence } = await estimateBpm(
       state.audioBuffer, (note) => { $("estimateNote").textContent = note; });
@@ -986,7 +996,7 @@ $("estimateBtn").onclick = async () => {
       : err.message;
   } finally {
     button.disabled = false;
-    button.textContent = "Estimate";
+    button.textContent = "Find the tempo";
   }
 };
 
