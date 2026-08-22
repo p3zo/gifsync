@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>gifsync beat marker</title>
+<title>Gifsync - Sync GIFs to music</title>
 <style>
 :root {
   --bg: #ffffff; --panel: #f4f4f5; --line: #d9d9de; --ink: #18181b;
@@ -23,11 +23,13 @@ body {
   margin: 0; padding: 0 1.25rem 4rem; background: var(--bg); color: var(--ink);
   font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
-header {
-  display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap;
-  max-width: 68rem; margin: 0 auto; padding: 1.5rem 0 1rem;
+header { max-width: 68rem; margin: 0 auto; padding: 1.5rem 0 1rem; }
+h1 { font-size: 1.3rem; margin: 0 0 .4rem; letter-spacing: -.01em; }
+#intro { margin: 0; max-width: 46rem; color: var(--dim); font-size: .925rem; }
+kbd {
+  font: inherit; font-family: var(--mono); font-size: .8em; padding: .05em .35em;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink);
 }
-h1 { font-size: 1.15rem; margin: 0; letter-spacing: -.01em; }
 h2 { font-size: .8rem; margin: 0 0 .75rem; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); }
 main { max-width: 68rem; margin: 0 auto; display: grid; gap: 1rem; }
 section {
@@ -86,7 +88,10 @@ a#download[hidden] { display: none; }
 <body>
 
 <header>
-  <h1>gifsync beat marker</h1>
+  <h1>Gifsync - Sync GIFs to music</h1>
+  <p id="intro">Drop in a GIF and mark the frames where you want the beat to hit. Drop in a song
+  and mark its beats: click them on the waveform, or tap <kbd>B</kbd> along to the music. Play it
+  back to check, nudge anything that feels off, then render and download.</p>
 </header>
 
 <main>
