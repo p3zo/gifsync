@@ -247,7 +247,7 @@ details.more .row { margin-top: .6rem; }
   <div class="row">
     <label>Tempo (BPM) <input type="number" id="bpm" step="0.1" min="1" value="120"></label>
     <button id="tapBtn">Tap the tempo</button>
-    <button id="estimateBtn">Find the tempo</button>
+    <button id="estimateBtn">Estimate tempo</button>
     <span class="say" id="estimateNote"></span>
   </div>
   <div class="row">
@@ -786,17 +786,18 @@ async function loadAudio(file) {
   state.audioBeats = [];
   state.peaks = null;
   beatHistory.length = 0;
+  songToken++;
 
   const total = Math.round(state.audioBuffer.duration);
   $("audioDrop").textContent =
     `${file.name} — ${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")} long. Drop another to replace.`;
   $("audioBody").hidden = false;
 
-  // Fetching the tempo model is most of the wait on a first estimate, so start it now
-  // rather than when the button is pressed. Nothing here depends on it arriving.
-  if (SERVED) loadTempoModel().catch(() => {});
-
   refresh();
+
+  // Guess the tempo and where its beats fall without being asked. Nothing below depends
+  // on it finishing, and dropping another song while it runs abandons this one.
+  if (SERVED) estimateSong({ keepExistingBeats: true });
 }
 
 // The tempo is read off the beats, so putting a beat back has to put the tempo back with it
@@ -1266,15 +1267,17 @@ function loadTempoModel() {
   return tempoModel;
 }
 
-async function estimateBpm(buffer, onProgress = () => {}) {
-  const { tf, model } = await loadTempoModel();
-
+async function renderMono(buffer) {
   const offline = new OfflineAudioContext(1, Math.ceil(buffer.duration * TEMPO_SR), TEMPO_SR);
   const source = offline.createBufferSource();
   source.buffer = buffer;
   source.connect(offline.destination);
   source.start();
-  const mono = (await offline.startRendering()).getChannelData(0);
+  return (await offline.startRendering()).getChannelData(0);
+}
+
+async function estimateBpm(mono, onProgress = () => {}) {
+  const { tf, model } = await loadTempoModel();
 
   const total = melFrameCount(mono.length);
   if (total < TEMPO_PATCH) {
@@ -1325,34 +1328,110 @@ async function estimateBpm(buffer, onProgress = () => {}) {
   return { bpm: best + 30, confidence: votes[best] / patches };
 }
 
-$("estimateBtn").onclick = async () => {
-  const button = $("estimateBtn");
-  if (!state.audioBuffer) return;
+if (!SERVED) {
+  $("estimateBtn").disabled = true;
+  $("estimateNote").textContent = NEEDS_SERVING;
+}
 
+/* ------------------------------------------------------------ beats in the song */
+
+// The tempo model says how fast the beats go and nothing about where they fall, so the
+// grid is slid across an envelope of the attacks and left wherever it catches the most.
+// One envelope frame is 5.8ms, finer than anyone can hear a downbeat being out by.
+const ONSET_WINDOW = 256, ONSET_HOP = 64;
+
+function onsetEnvelope(mono) {
+  const frames = Math.max(0, Math.floor((mono.length - ONSET_WINDOW) / ONSET_HOP) + 1);
+  const loudness = new Float64Array(frames);
+  for (let f = 0; f < frames; f++) {
+    const at = f * ONSET_HOP;
+    let sum = 0;
+    for (let i = 0; i < ONSET_WINDOW; i++) sum += Math.abs(mono[at + i]);
+    loudness[f] = sum / ONSET_WINDOW;
+  }
+
+  // rising loudness is something being struck; falling loudness is the tail of one that
+  // was struck already, and says nothing about where the beat was. Sound arriving in the
+  // very first frame is a rise from silence: a song trimmed to start on its downbeat has
+  // no earlier frame to be louder than, and without this that downbeat is invisible.
+  const onset = new Float64Array(frames);
+  for (let f = 0; f < frames; f++) onset[f] = Math.max(0, loudness[f] - (f ? loudness[f - 1] : 0));
+  return onset;
+}
+
+function findFirstBeat(mono, bpm) {
+  const onset = onsetEnvelope(mono);
+  const rate = TEMPO_SR / ONSET_HOP;
+  const period = (60 / bpm) * rate;
+  if (!(period >= 2) || onset.length < 2 * period) return 0;
+
+  let best = 0, bestScore = -1;
+  for (let phase = 0; phase < Math.round(period); phase++) {
+    let score = 0;
+    // counted off the phase rather than stepped, so a long song does not drift
+    for (let k = 0; phase + k * period < onset.length; k++) {
+      // a beat almost never lands dead on an envelope frame, so take the best of three
+      const i = Math.round(phase + k * period);
+      score += Math.max(onset[i - 1] || 0, onset[i] || 0, onset[i + 1] || 0);
+    }
+    if (score > bestScore) { bestScore = score; best = phase; }
+  }
+  return best / rate;
+}
+
+// One estimate serves both the button and the automatic run on load. A song swapped out
+// while this is still going gets a new token, and the answer to the old one is dropped.
+let songToken = 0;
+
+async function estimateSong({ keepExistingBeats }) {
+  const token = songToken;
+  const button = $("estimateBtn");
   button.disabled = true;
   button.textContent = "Listening…";
+
   try {
-    const { bpm, confidence } = await estimateBpm(
-      state.audioBuffer, (note) => { $("estimateNote").textContent = note; });
+    const mono = await renderMono(state.audioBuffer);
+    const { bpm, confidence } = await estimateBpm(mono, (note) => {
+      if (token === songToken) $("estimateNote").textContent = note;
+    });
+    if (token !== songToken) return;
+
     $("bpm").value = bpm.toFixed(1);
+
+    // The automatic run happens while the page is usable, so anything marked in the
+    // meantime was marked by a person and outranks the guess. Pressing the button does
+    // mean replace, and that is undoable.
+    if (!(keepExistingBeats && state.audioBeats.length)) {
+      if (!keepExistingBeats) rememberBeats();
+      const period = 60 / bpm;
+      const first = findFirstBeat(mono, bpm);
+      // Four marks: one would be enough to say where the animation starts, and four say
+      // plainly on the waveform how fast the machine thinks the song is going.
+      state.audioBeats = [0, 1, 2, 3]
+        .map((k) => first + k * period)
+        .filter((t) => t < state.audioBuffer.duration);
+    }
+
     $("estimateNote").innerHTML = `Sounds like <b>${bpm} BPM</b>.` +
       // the model always names a tempo; when the vote is this split it is often the wrong one
       (confidence < 0.5 ? ` <span class="warn">It is not sure though, so play it back and check.</span>` : "");
     refresh();
   } catch (err) {
+    if (token !== songToken) return;
     $("estimateNote").textContent = err.message.includes("Failed to fetch")
       ? "Could not load the tempo model. It needs a network connection the first time."
       : err.message;
   } finally {
-    button.disabled = false;
-    button.textContent = "Find the tempo";
+    if (token === songToken) {
+      button.disabled = false;
+      button.textContent = "Estimate tempo";
+    }
   }
-};
-
-if (!SERVED) {
-  $("estimateBtn").disabled = true;
-  $("estimateNote").textContent = NEEDS_SERVING;
 }
+
+$("estimateBtn").onclick = () => {
+  if (state.audioBuffer) estimateSong({ keepExistingBeats: false });
+};
 
 // BPM is the song's tempo; hits is how often the animation lands against it
 function getMsPerBeat() {
