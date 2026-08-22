@@ -4,6 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Gifsync - Sync GIFs to music</title>
+
+<!-- Page views only. Nothing about the gif or the song is measured or sent anywhere: both
+     are decoded, retimed and encoded in this tab and never leave it. Off a file:// url
+     there is nothing to count and the request would only error, so it is not loaded. -->
+<script>
+const ANALYTICS_ID = "G-XXXXXXXXXX";
+
+if (location.protocol.startsWith("http") && !ANALYTICS_ID.includes("XXX")) {
+  const tag = document.createElement("script");
+  tag.async = true;
+  tag.src = `https://www.googletagmanager.com/gtag/js?id=${ANALYTICS_ID}`;
+  document.head.append(tag);
+
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = function () { dataLayer.push(arguments); };
+  gtag("js", new Date());
+  gtag("config", ANALYTICS_ID);
+}
+</script>
+
 <style>
 :root {
   --bg: #ffffff; --panel: #f4f4f5; --line: #d9d9de; --ink: #18181b;
