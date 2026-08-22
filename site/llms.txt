@@ -17,10 +17,8 @@ states a licence for every file.
 ## Pages
 
 - [Gifsync](https://p3zo.github.io/gifsync/): the tool, plus how it works and the common questions
-- [Examples](https://p3zo.github.io/gifsync/examples/): one GIF and one song timed three ways, with sound
+- [Examples](https://p3zo.github.io/gifsync/examples/): one loop rendered at three different settings, with sound
 - [BPM to frame timing](https://p3zo.github.io/gifsync/bpm-frame-timing/): how long to hold each frame at a given tempo, and why a GIF cannot express it exactly
-- [Match a GIF to your project tempo](https://p3zo.github.io/gifsync/for-producers/): for a tempo you already know from a DAW
-- [Sync a GIF to an osu! beatmap's BPM](https://p3zo.github.io/gifsync/osu/)
 
 ## Source
 
