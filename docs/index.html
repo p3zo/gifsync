@@ -69,8 +69,12 @@ label { display: inline-flex; align-items: center; gap: .4rem; font-size: .875re
 input[type=number], select { font: inherit; font-size: .875rem; padding: .3rem .4rem;
   border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
 input[type=number] { width: 6rem; }
-.key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; }
-.k-mark { background: var(--accent); } .k-grid { background: var(--grid); } .k-loop { background: var(--loop); }
+/* Each kind of mark on the waveform has its own shape as well as its own colour, and
+   the legend draws that shape rather than a colour swatch. */
+.legend { gap: 1.25rem; }
+.legend span { display: inline-flex; align-items: center; gap: .4rem; color: var(--dim); font-size: .8rem; }
+.glyph { width: 12px; height: 18px; flex: none; }
+.g-mark { color: var(--accent); } .g-grid { color: var(--grid); } .g-loop { color: var(--loop); }
 .drop {
   border: 1.5px dashed var(--line); border-radius: 8px; padding: 1.75rem 1rem; text-align: center;
   color: var(--dim); cursor: pointer; font-size: .9rem;
@@ -169,11 +173,19 @@ a#download[hidden] { display: none; }
       <button id="clearBeatsBtn">Clear all beats</button>
       <span class="say" id="audioSummary"></span>
     </div>
-    <div class="row"><span class="mono">
-      <span class="key k-mark"></span> beats you marked in the song
-      &nbsp; <span class="key k-grid"></span> where the gif's beat frames land
-      &nbsp; <span class="key k-loop"></span> where the gif's loop restarts
-    </span></div>
+    <div class="row legend">
+      <span><svg class="glyph g-mark" viewBox="0 0 12 18" aria-hidden="true">
+        <polygon points="1,0 11,0 6,7" fill="currentColor"/>
+        <line x1="6" y1="0" x2="6" y2="9" stroke="currentColor" stroke-width="2"/></svg>
+        beats you marked in the song</span>
+      <span><svg class="glyph g-grid" viewBox="0 0 12 18" aria-hidden="true">
+        <line x1="6" y1="18" x2="6" y2="7" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 3"/></svg>
+        where the gif's beat frames land</span>
+      <span><svg class="glyph g-loop" viewBox="0 0 12 18" aria-hidden="true">
+        <rect x="3" y="0" width="6" height="6" fill="currentColor"/>
+        <line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="1"/></svg>
+        where the gif's loop restarts</span>
+    </div>
   </div>
   </div>
 </section>
@@ -528,29 +540,53 @@ function drawWave(playheadSeconds = null) {
   }
 
   // Where each beat frame of the animation will land, and where the loop starts over.
-  // Batched into two paths because a fast setting puts a couple of thousand lines here.
+  // Batched into paths because a fast setting puts a couple of thousand lines here.
   if (currentTiming) {
     const step = currentTiming.msPerBeat / 1000;
-    const grid = new Path2D(), loop = new Path2D();
+    const grid = new Path2D(), loop = new Path2D(), loopCaps = new Path2D();
+    // The square caps only go on where there is room to tell them apart; packed tighter
+    // than that they merge into a solid band and say less than the bare lines do.
+    const caps = (step / duration) * w >= 5;
     for (let k = 0; ; k++) {
       const t = downbeat() + k * step;
       if (t >= duration) break;
-      const path = k % currentTiming.beats.length === 0 ? loop : grid;
-      path.moveTo(at(t), k % currentTiming.beats.length === 0 ? 0 : h * 0.62);
-      path.lineTo(at(t), h);
+      const x = at(t);
+      if (k % currentTiming.beats.length === 0) {
+        loop.moveTo(x, 0);
+        loop.lineTo(x, h);
+        if (caps) loopCaps.rect(x - 3, 0, 6, 6);
+      } else {
+        grid.moveTo(x, h * 0.62);
+        grid.lineTo(x, h);
+      }
     }
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
     ctx.strokeStyle = css.getPropertyValue("--grid");
     ctx.stroke(grid);
+    ctx.setLineDash([]);
+    ctx.lineWidth = 1;
     ctx.strokeStyle = css.getPropertyValue("--loop");
     ctx.stroke(loop);
+    ctx.fillStyle = css.getPropertyValue("--loop");
+    ctx.fill(loopCaps);
   }
 
+  const beatLines = new Path2D(), flags = new Path2D();
+  for (const t of state.audioBeats) {
+    const x = at(t);
+    beatLines.moveTo(x, 0);
+    beatLines.lineTo(x, h * 0.4);
+    flags.moveTo(x - 4, 0);
+    flags.lineTo(x + 4, 0);
+    flags.lineTo(x, 7);
+    flags.closePath();
+  }
   ctx.strokeStyle = css.getPropertyValue("--accent");
   ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (const t of state.audioBeats) { ctx.moveTo(at(t), 0); ctx.lineTo(at(t), h * 0.4); }
-  ctx.stroke();
+  ctx.stroke(beatLines);
+  ctx.fillStyle = css.getPropertyValue("--accent");
+  ctx.fill(flags);
 
   if (playheadSeconds !== null) {
     ctx.strokeStyle = css.getPropertyValue("--ink");
