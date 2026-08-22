@@ -26,7 +26,11 @@ body {
 header { max-width: 78rem; margin: 0 auto; padding: 1.25rem 0 .75rem; }
 h1 { font-size: 1.3rem; margin: 0 0 .4rem; letter-spacing: -.01em; }
 #intro { margin: 0; max-width: 46rem; color: var(--dim); font-size: .925rem; }
-#intro a { color: var(--ink); }
+footer {
+  max-width: 78rem; margin: 2rem auto 0; padding-top: .9rem; border-top: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; font-size: .8rem; color: var(--dim);
+}
+footer a { color: var(--ink); }
 header .row { margin-top: .9rem; }
 kbd {
   font: inherit; font-family: var(--mono); font-size: .8em; padding: .05em .35em;
@@ -202,9 +206,7 @@ details.more .row { margin-top: .6rem; }
 <header>
   <h1>Gifsync - Sync GIFs to music</h1>
   <p id="intro">Drop in a GIF and a song. Gifsync picks out the beats in both and lines them up
-  for you. Play it back, change anything that looks or sounds off, then save the video.
-  Like it? <a href="https://ko-fi.com/patricio_" target="_blank" rel="noopener">Support the
-  developer</a>.</p>
+  for you. Play it back, change anything that looks or sounds off, then save the video.</p>
   <div class="row">
     <button id="exampleBtn">Try an example</button>
     <span class="say" id="exampleNote"></span>
@@ -367,6 +369,12 @@ details.more .row { margin-top: .6rem; }
 </div>
 
 </main>
+
+<footer>
+  <span>Your GIF and song never leave your browser.</span>
+  <a href="https://github.com/p3zo/gifsync" target="_blank" rel="noopener">Source on GitHub</a>
+  <a href="https://ko-fi.com/patricio_" target="_blank" rel="noopener">Support the developer</a>
+</footer>
 
 <dialog id="picker">
   <div class="pickerhead">
