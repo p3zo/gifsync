@@ -183,6 +183,16 @@ details.more .row { margin-top: .6rem; }
       <span class="say" id="framePos"></span>
     </div>
     <div class="row">
+      <button id="gifPlayBtn">Play the GIF</button>
+      <label>at
+        <select id="gifSpeed">
+          <option value="1" selected>full speed</option>
+          <option value="0.5">half speed</option>
+          <option value="0.25">quarter speed</option>
+        </select>
+      </label>
+    </div>
+    <div class="row">
       <button id="suggestBtn">Suggest beat frames</button>
       <label>for a loop of <input type="number" id="suggestCount" min="1" step="1" value="8"> beats</label>
     </div>
@@ -370,7 +380,7 @@ function remember(history, snapshot) {
 }
 
 const state = {
-  gifFile: null, frames: [], width: 0, height: 0, cur: 0, beats: new Set(),
+  gifFile: null, frames: [], holds: [], width: 0, height: 0, cur: 0, beats: new Set(),
   audioFile: null, audioBuffer: null, audioBeats: [], peaks: null,
 };
 
@@ -431,9 +441,13 @@ async function loadGif(file) {
 
   const count = decoder.tracks.selectedTrack.frameCount;
   const frames = [];
+  const holds = [];
   for (let i = 0; i < count; i++) {
     const { image } = await decoder.decode({ frameIndex: i });
     frames.push(await createImageBitmap(image));
+    // What the file asks each frame to be held for, in ms. A gif that says nothing gets
+    // the 100ms a browser would give it.
+    holds.push(image.duration ? image.duration / 1000 : 100);
     image.close();
   }
   decoder.close();
@@ -442,6 +456,7 @@ async function loadGif(file) {
 
   state.gifFile = file;
   state.frames = frames;
+  state.holds = holds;
   state.width = frames[0].width;
   state.height = frames[0].height;
   state.cur = 0;
@@ -589,6 +604,24 @@ function paintFrame(ctx, frame, width, height) {
   ctx.drawImage(state.frames[frame], 0, 0);
 }
 
+// Everything that has to follow the selected frame, and nothing that does not: this runs
+// on every frame of a playing gif, where a full refresh would be far too much work
+function showCurrentFrame() {
+  const ready = state.frames.length > 0;
+  $("framePos").innerHTML = ready ? `Frame <b>${state.cur + 1}</b> of ${state.frames.length}` : "";
+  $("markBtn").textContent = state.beats.has(state.cur) ? "Unmark this frame (space)" : "Mark this frame (space)";
+
+  [...$("strip").children].forEach((c, i) => {
+    c.classList.toggle("cur", i === state.cur);
+    c.classList.toggle("beat", state.beats.has(i));
+  });
+  $("strip").children[state.cur]?.scrollIntoView({ block: "nearest", inline: "center" });
+
+  for (const item of $("beatStrip").children) {
+    item.classList.toggle("cur", Number(item.dataset.frame) === state.cur);
+  }
+}
+
 function drawFrame() {
   for (const id of ["frameCanvas", "previewCanvas"]) {
     // The preview canvas tracks the selected frame while it is idle, so it is never blank
@@ -597,12 +630,50 @@ function drawFrame() {
   }
 }
 
+// Playing the animation on its own and hitting space on the accents is the quick way to
+// mark them; stepping frame by frame is the way to tidy that up afterwards.
+let gifPlayback = null;
+
+function startGifPlayback() {
+  if (!state.frames.length) return;
+  stopPlayback();
+  gifPlayback = { due: performance.now(), raf: 0 };
+  gifPlayback.raf = requestAnimationFrame(tickGif);
+  syncTransport();
+}
+
+function stopGifPlayback() {
+  if (!gifPlayback) return;
+  cancelAnimationFrame(gifPlayback.raf);
+  gifPlayback = null;
+  syncTransport();
+}
+
+function tickGif() {
+  const now = performance.now();
+  const hold = state.holds[state.cur] / parseFloat($("gifSpeed").value);
+
+  if (now >= gifPlayback.due) {
+    gifPlayback.due += hold;
+    // a backgrounded tab comes back seconds behind, and running every missed frame at
+    // once is no use to anyone watching for an accent
+    if (now - gifPlayback.due > 500) gifPlayback.due = now + hold;
+    state.cur = (state.cur + 1) % state.frames.length;
+    drawFrame();
+    showCurrentFrame();
+  }
+
+  gifPlayback.raf = requestAnimationFrame(tickGif);
+}
+
+$("gifPlayBtn").onclick = () => (gifPlayback ? stopGifPlayback() : startGifPlayback());
+
 function step(delta) {
   if (!state.frames.length) return;
+  stopGifPlayback();
   state.cur = (state.cur + delta + state.frames.length) % state.frames.length;
   drawFrame();
   refresh();
-  $("strip").children[state.cur]?.scrollIntoView({ block: "nearest", inline: "center" });
 }
 
 function toggleMark() {
@@ -889,6 +960,7 @@ let playback = null;
 
 function startPlayback() {
   stopPlayback();
+  stopGifPlayback();
   actx.resume();
 
   const from = downbeat();
@@ -958,6 +1030,7 @@ function tickPlayback() {
 function syncTransport() {
   $("previewBtn").textContent = playback ? "Stop" : "Play preview";
   $("tapBeatBtn").disabled = !playback;
+  $("gifPlayBtn").textContent = gifPlayback ? "Stop the GIF" : "Play the GIF";
 }
 
 $("previewBtn").onclick = () => (playback ? stopPlayback() : startPlayback());
@@ -1310,21 +1383,11 @@ function computeTiming() {
 function refresh() {
   const ready = { gif: state.frames.length > 0, audio: !!state.audioBuffer };
 
-  $("framePos").innerHTML = ready.gif ? `Frame <b>${state.cur + 1}</b> of ${state.frames.length}` : "";
-  $("markBtn").textContent = state.beats.has(state.cur) ? "Unmark this frame (space)" : "Mark this frame (space)";
-
-  [...$("strip").children].forEach((c, i) => {
-    c.classList.toggle("cur", i === state.cur);
-    c.classList.toggle("beat", state.beats.has(i));
-  });
-
   $("undoMarkBtn").disabled = !markHistory.length;
   $("undoBeatBtn").disabled = !beatHistory.length;
 
   buildBeatStrip();
-  for (const item of $("beatStrip").children) {
-    item.classList.toggle("cur", Number(item.dataset.frame) === state.cur);
-  }
+  showCurrentFrame();
 
   const beats = [...state.beats].sort((a, b) => a - b);
   $("beatList").innerHTML = beats.length
