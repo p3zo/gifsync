@@ -555,6 +555,7 @@ async function loadGif(file) {
   $("previewCanvas").height = state.height;
 
   $("suggestCount").max = frames.length;
+  $("suggestCount").value = evenBeatCount(parseInt($("suggestCount").value, 10) || 1, frames.length);
   // Start from a suggestion rather than an empty strip: correcting marks that are roughly
   // right is much less work than placing the first one from nothing
   state.beats = suggestBeatFrames(parseInt($("suggestCount").value, 10) || 1);
@@ -575,6 +576,23 @@ async function loadGif(file) {
 // onto whichever of its two neighbours changes most gets a little closer still: 0.60 and
 // 0.50 frames of average error against the two, where marks thrown down at random score
 // about 3. The nudge is held to one frame because widening it made things worse.
+
+// A beat covers a whole number of frames, so a count that does not divide the gif leaves
+// some beats holding a frame more than others: 20 frames over 8 beats alternates 3 and 2,
+// which is a 50% speed oscillation, and the loop's last gap is one of the short ones — the
+// animation visibly stalls on its final frames just before it cuts back to the start.
+// Moving the automatic count to a nearby divisor removes it outright. Nothing nearby
+// divides a prime frame count, and shoving 8 up to 17 would be worse than the limp, so in
+// that case the asked-for count stands and the unevenness is unavoidable.
+function evenBeatCount(wanted, n) {
+  const near = [];
+  for (let d = 1; d <= n; d++) {
+    if (n % d === 0 && Math.abs(d - wanted) <= wanted / 4) near.push(d);
+  }
+  if (!near.length) return wanted;
+  return near.reduce((a, d) => (Math.abs(d - wanted) < Math.abs(a - wanted) ? d : a));
+}
+
 const SUGGEST_SIZE = 64;
 
 // How much the picture changes from the frame before, for every frame around the loop

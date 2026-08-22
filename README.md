@@ -102,7 +102,12 @@ a track by a known amount and the answer shifts with it to within about 10ms, on
 songs here.
 
 Suggested beat frames are an even spread around the loop starting at frame 0, with each mark nudged
-onto whichever of its two neighbouring frames changes most. That is a duller idea than it sounds
+onto whichever of its two neighbouring frames changes most. The count is moved to a nearby divisor
+of the frame count first: a beat covers a whole number of frames, so 20 frames over 8 beats has to
+alternate 3 and 2, and that 50% swing in speed is plain to see — worst on the loop's last frames,
+which are held longest and are then cut straight back to the start. Ten beats over those 20 frames
+is even the whole way round. A prime frame count has no divisor worth moving to, so it keeps the
+count it was given and the unevenness stands. That is a duller idea than it sounds
 like it should be, and it is what the evidence supported: neither dance GIF here repeats at its
 accent period, so nothing periodic in the pixels finds the accents, and of two dozen candidate
 signals only the one-frame nudge beat the plain even spread without ever making it worse. Against
@@ -130,8 +135,9 @@ today. The Pages workflow runs both before deploying.
 
 - **How many beats a loop should last is your call.** Nothing in the pixels settles it, and the two
   hand-labelled GIFs here were deliberately run slower and faster than their own frame rate. Eight
-  is the starting guess, and the count is a setting rather than something you are asked for up
-  front, since there is no way to know it before seeing the animation against the song.
+  is the starting guess — moved to whatever divisor of the frame count is nearest, so the animation
+  runs at one speed — and the count is a setting rather than something you are asked for up front,
+  since there is no way to know it before seeing the animation against the song.
 - **Deriving tempo from beat marks assumes they are consecutive beats.** Mark every bar instead and
   the tempo comes out too slow by that factor.
 - **A frame shorter than a display refresh will not read**, however exactly it is timed. The eased
