@@ -4,6 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Gifsync - Sync GIFs to music</title>
+
+<!-- Page views only. Nothing about the gif or the song is measured or sent anywhere: both
+     are decoded, retimed and encoded in this tab and never leave it. Off a file:// url
+     there is nothing to count and the request would only error, so it is not loaded. -->
+<script>
+const ANALYTICS_ID = "G-DXECQPY3E4";
+
+if (location.protocol.startsWith("http")) {
+  const tag = document.createElement("script");
+  tag.async = true;
+  tag.src = `https://www.googletagmanager.com/gtag/js?id=${ANALYTICS_ID}`;
+  document.head.append(tag);
+
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = function () { dataLayer.push(arguments); };
+  gtag("js", new Date());
+  gtag("config", ANALYTICS_ID);
+}
+</script>
+
 <style>
 :root {
   --bg: #ffffff; --panel: #f4f4f5; --line: #d9d9de; --ink: #18181b;
@@ -138,7 +158,6 @@ input[type=color] { width: 2.4rem; height: 1.7rem; padding: 1px; border: 1px sol
 .make { justify-content: flex-end; }
 .hits { margin-top: .9rem; }
 /* the legend is already a dense line of small text; the fold needs air under it */
-details.spaced { margin-top: 1.1rem; }
 
 #gifCredit { margin-top: .6rem; }
 #gifCredit:empty { display: none; }
@@ -237,7 +256,7 @@ details.more .row { margin-top: .6rem; }
     <div id="beatStrip"></div>
     <div class="say" id="beatList"></div>
     <details class="more">
-      <summary>Change them by hand</summary>
+      <summary>Change beat frames by hand</summary>
       <canvas id="frameCanvas"></canvas>
       <div class="row">
         <button id="prevBtn">&#9664;</button>
@@ -302,6 +321,25 @@ details.more .row { margin-top: .6rem; }
       </div>
       <div class="say" id="estimateNote"></div>
       <div class="say" id="timingSummary"></div>
+      <details class="more">
+        <summary>More controls</summary>
+        <div class="row">
+          <button id="tapBtn">Tap the tempo</button>
+          <span id="tapBeatWrap"><button id="tapBeatBtn">Tap a beat (B)</button></span>
+          <button id="undoBeatBtn">Undo</button>
+          <button id="clearBeatsBtn">Clear all beats</button>
+        </div>
+        <div class="row">
+          <label>Between beats
+            <select id="interpolation">
+              <option value="linear">even</option>
+              <option value="quadratic">ease in and out</option>
+              <option value="cubic">ease in and out more</option>
+            </select>
+          </label>
+          <label><input type="checkbox" id="clickTrack"> Play a click on each beat</label>
+        </div>
+      </details>
     </div>
   </div>
 
@@ -311,7 +349,7 @@ details.more .row { margin-top: .6rem; }
     <div class="row legend">
       <span><svg class="glyph g-mark" viewBox="0 0 12 18" aria-hidden="true">
         <line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="2"/></svg>
-        beats you marked in the song</span>
+        beats in the song</span>
       <span><svg class="glyph g-grid" viewBox="0 0 12 18" aria-hidden="true">
         <polygon points="1,18 11,18 6,9" fill="currentColor"/></svg>
         where the gif's beat frames land</span>
@@ -333,26 +371,6 @@ details.more .row { margin-top: .6rem; }
     </label>
   </div>
 
-  <details class="more spaced">
-    <summary>More controls</summary>
-    <div class="row">
-      <button id="tapBtn">Tap the tempo</button>
-      <span id="tapBeatWrap"><button id="tapBeatBtn">Tap a beat (B)</button></span>
-      <button id="undoBeatBtn">Undo</button>
-      <button id="clearBeatsBtn">Clear all beats</button>
-    </div>
-    <div class="row">
-      <label>Between beats
-        <select id="interpolation">
-          <option value="linear">even</option>
-          <option value="quadratic">ease in and out</option>
-          <option value="cubic">ease in and out more</option>
-        </select>
-      </label>
-      <label><input type="checkbox" id="clickTrack"> Play a click on each beat</label>
-      <label>Background <input type="color" id="bgColor" value="#000000"></label>
-    </div>
-  </details>
   <div class="row make">
     <button id="renderBrowserBtn" class="primary">Make the video</button>
   </div>
@@ -703,10 +721,10 @@ function buildBeatStrip() {
 }
 
 // No browser's video encoder will keep an alpha channel, so a transparent pixel has to
-// become some colour on the way into the mp4. Everything that shows a frame paints that
-// colour first, so what the preview shows is what the render produces.
+// become some colour on the way into the mp4. Everything that shows a frame paints black
+// first, so what the preview shows is what the render produces.
 function paintFrame(ctx, frame, width, height) {
-  ctx.fillStyle = $("bgColor").value;
+  ctx.fillStyle = "#000000";
   ctx.fillRect(0, 0, width, height);
   ctx.drawImage(state.frames[frame], 0, 0);
 }
@@ -1296,8 +1314,6 @@ function tapBeat() {
 }
 
 $("tapBeatBtn").onclick = tapBeat;
-
-$("bgColor").oninput = () => { drawFrame(); refresh(); };
 
 /* -------------------------------------------------------------- click track */
 
