@@ -92,8 +92,6 @@ today. The Pages workflow runs both before deploying.
 - **A frame shorter than a display refresh will not read**, however exactly it is timed. The eased
   curves reach that first, since their shortest frames sit right at the beat; the page warns when
   any duration falls below it.
-- **Firefox has no AAC encoder**, so it produces an Opus track, which QuickTime and Safari will not
-  play. Chrome and Safari produce AAC. The page says which you are getting.
 - **Transparency is not preserved.**
 - **Finding the tempo needs the page served**, not opened off the filesystem, and a network
   connection the first time so TensorFlow.js can load. *Try an example* needs it served for the same
