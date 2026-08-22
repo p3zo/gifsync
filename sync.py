@@ -10,10 +10,25 @@ from easing import CubicEaseInOut, LinearInOut, QuadEaseInOut
 
 
 def get_durations(beat_frames, ms_per_beat, n_frames, interpolation="linear"):
-    """Calculate the duration in milliseconds needed to sync the output frames to the beat frames"""
+    """Calculate the duration in milliseconds needed to sync the output frames to the beat frames.
+
+    The durations are ordered from the first beat frame, wrapping around the end of the gif, so
+    they line up with the playback order produced by get_frame_order.
+    """
 
     if interpolation not in ["linear", "cubic", "quadratic"]:
         raise ValueError(f"{interpolation=} not supported")
+
+    if not beat_frames:
+        raise ValueError("At least one beat frame is required.")
+
+    if list(beat_frames) != sorted(set(beat_frames)):
+        raise ValueError(f"Beat frames must be sorted and unique, got {beat_frames}.")
+
+    if beat_frames[0] < 0 or beat_frames[-1] >= n_frames:
+        raise ValueError(
+            f"Beat frames must be within [0, {n_frames - 1}], got {beat_frames}."
+        )
 
     durations = []
 
@@ -36,15 +51,23 @@ def get_durations(beat_frames, ms_per_beat, n_frames, interpolation="linear"):
         times = list(map(lerp, x))
         durations.extend([i - j for i, j in zip(times[1:], times)])
 
-    # Re-align the sequence with the input frames
-    aligned = durations[beat_frames[0] :] + durations[: beat_frames[0]]
-
-    if any([i < 2 for i in aligned]):
+    if any([i < 2 for i in durations]):
         print(
             "WARNING: Durations less than 2ms are not processed well by ffmpeg (TODO: source?).\nTry using fewer beat frames or a different interpolation method."
         )
 
-    return aligned
+    return durations
+
+
+def get_frame_order(first_beat_frame, n_frames):
+    """The order to play the gif's frames in, starting on the first beat frame.
+
+    The animation has to open on a beat frame for the beat frames to land on the audio's beats.
+    Starting anywhere else offsets every one of them by however long it takes to reach the first,
+    which is a fraction of a beat rather than a whole one.
+    """
+
+    return [(first_beat_frame + i) % n_frames for i in range(n_frames)]
 
 
 if __name__ == "__main__":
@@ -136,24 +159,17 @@ if __name__ == "__main__":
     tmp_txt = os.path.join(tmpdir, "input.txt")
     tmp_vid = os.path.join(tmpdir, "tmp.mov")
 
+    for frame in range(im.n_frames):
+        print(f"Saving frame {frame}")
+        im.seek(frame)
+        im.save(os.path.join(tmpdir, f"{frame}.png"))
+
+    frame_order = get_frame_order(beat_frames[0], im.n_frames)
+
     with open(tmp_txt, "w") as fh:
-        try:
-            while 1:
-                ix = im.tell()
-                print(f"Saving frame {ix}")
-                img_filename = f"{ix}.png"
-                im.save(
-                    os.path.join(tmpdir, img_filename),
-                    duration=durations[ix],
-                    disposal=3,  # 3: Restore to previous content
-                )
-
-                fh.write(f"file '{img_filename}'\n")
-                fh.write(f"duration {durations[ix]}ms\n")
-
-                im.seek(ix + 1)
-        except EOFError:
-            pass
+        for ix, frame in enumerate(frame_order):
+            fh.write(f"file '{frame}.png'\n")
+            fh.write(f"duration {durations[ix]}ms\n")
 
     # Stitch the images together into a video
     # TODO: preserve transparency channels of input PNGs when concatenating
