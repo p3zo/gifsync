@@ -26,6 +26,7 @@ body {
 header { max-width: 68rem; margin: 0 auto; padding: 1.5rem 0 1rem; }
 h1 { font-size: 1.3rem; margin: 0 0 .4rem; letter-spacing: -.01em; }
 #intro { margin: 0; max-width: 46rem; color: var(--dim); font-size: .925rem; }
+header .row { margin-top: .9rem; }
 kbd {
   font: inherit; font-family: var(--mono); font-size: .8em; padding: .05em .35em;
   border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink);
@@ -145,6 +146,10 @@ details.more .row { margin-top: .6rem; }
   <p id="intro">Drop in a GIF and mark the frames where you want the beat to hit. Drop in a song
   and mark its beats: click them on the waveform, or tap <kbd>B</kbd> along to the music. Play it
   back to check, nudge anything that feels off, then render and download.</p>
+  <div class="row">
+    <button id="exampleBtn">Try an example</button>
+    <span class="say" id="exampleNote"></span>
+  </div>
 </header>
 
 <main>
@@ -538,6 +543,56 @@ addEventListener("keydown", (e) => {
   else if (e.key === " ") { toggleMark(); e.preventDefault(); }
   else if (e.key === "b" || e.key === "B") { tapBeat(); e.preventDefault(); }
 });
+
+/* -------------------------------------------------------------------- example */
+
+// A page that fills itself in is the quickest way to see what any of this does. Both
+// files were generated for the job, so there is nothing to license: the ball hits the
+// ground on frames 0 and 8, and the loop is four to the floor at 120bpm.
+const EXAMPLE = {
+  gif: "example/bouncing-ball.gif",
+  audio: "example/four-on-the-floor.mp3",
+  gifBeats: [0, 8],
+  songBeats: [0, 0.5, 1, 1.5],
+  bpm: "120",
+};
+
+async function loadExample() {
+  const grab = async (path, type) => {
+    const response = await fetch(path);
+    if (!response.ok) throw new Error(`Could not load ${path} — the server said ${response.status}.`);
+    return new File([await response.blob()], path.split("/").pop(), { type });
+  };
+
+  await loadGif(await grab(EXAMPLE.gif, "image/gif"));
+  await loadAudio(await grab(EXAMPLE.audio, "audio/mpeg"));
+
+  state.beats = new Set(EXAMPLE.gifBeats);
+  state.audioBeats = [...EXAMPLE.songBeats];
+  $("bpm").value = EXAMPLE.bpm;
+  refresh();
+}
+
+$("exampleBtn").onclick = async () => {
+  const button = $("exampleBtn");
+  button.disabled = true;
+  button.textContent = "Loading…";
+  clearError();
+  try {
+    await loadExample();
+  } catch (err) {
+    fail(err);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Try an example";
+  }
+};
+
+// fetch cannot reach the example files when the page is opened straight off the disk
+if (location.protocol === "file:") {
+  $("exampleBtn").disabled = true;
+  $("exampleNote").textContent = "The example needs the page to be served, not opened from a file.";
+}
 
 /* ---------------------------------------------------------------------- audio */
 
