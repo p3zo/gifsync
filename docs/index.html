@@ -42,6 +42,10 @@ main { max-width: 78rem; margin: 0 auto; display: grid; gap: 1rem; grid-template
   #error, #unsupported { grid-column: 1 / -1; }
 }
 
+footer { max-width: 78rem; margin: 1.75rem auto 0; font-size: .8rem; color: var(--dim); }
+footer a { color: inherit; }
+footer a:hover { color: var(--ink); }
+
 .stagerow { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; margin-bottom: .75rem; }
 .stagerow > :first-child { flex: none; }
 .stagecontrols { flex: 1; min-width: 13rem; display: grid; gap: .6rem; align-content: start; }
@@ -366,6 +370,10 @@ details.more .row { margin-top: .6rem; }
 </div>
 
 </main>
+
+<footer>
+  <a href="https://ko-fi.com/patricio_" target="_blank" rel="noopener">Buy me a coffee</a>
+</footer>
 
 <dialog id="picker">
   <div class="pickerhead">
