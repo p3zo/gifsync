@@ -1,15 +1,19 @@
-# GIF Sync
+# Gifsync
 
-Reassembles the frames of a GIF to sync its animation to the beat of an audio file.
+Gifsync is a free browser tool that retimes a GIF so its animation lands on the beat of a song, and
+saves the result as an MP4 with the audio in it. Nothing is uploaded: the decoding, the retiming and
+the encoding all happen in the page. **<https://p3zo.github.io/gifsync/>**
 
-A GIF stores a duration per frame, so nothing has to be added or dropped to retime one. The frames
-just get held for different lengths. Mark the frames the beat should land on, mark the beats of the
+Most tools that offer to add music to a GIF lay an audio track underneath and leave the animation
+alone, so the loop slides out of time with the song. This one changes the animation instead. A GIF
+stores a duration per frame, so nothing has to be added or dropped to retime one. The frames just
+get held for different lengths. Mark the frames the beat should land on, mark the beats of the
 song, and the animation is stretched so the two line up. The output is an mp4 of the retimed
 animation with the audio muxed in, looped to the length of the audio.
 
-It runs in the browser: **<https://p3zo.github.io/gifsync/>**, or open
-[site/index.html](site/index.html) off disk. The page explains how to use it. This file is about how
-it works.
+[The examples](https://p3zo.github.io/gifsync/examples/) are the same GIF and the same bar timed
+three ways, with sound. The page itself explains how to use it, and also runs from
+[site/index.html](site/index.html) off disk. This file is about how it works.
 
 ## How it works
 
@@ -51,6 +55,12 @@ covers a whole number of frames, so 20 frames over 8 beats has to alternate 3 an
 swing in speed is plain to see. Ten beats over those 20 frames is even the whole way round. A prime
 frame count has no divisor worth moving to, so it keeps the count it was given.
 
+**Opening a setup from a link.** The page reads `gif` (a Wikimedia Commons file title), `bpm`,
+`marks` (frame numbers), `ease` (`even`, `inout`, `inout-more`) and `hits` off the query string, and
+`demo=1` loads the bundled example. Anything it does not recognise is left alone, so a link that
+comes back with tracking parameters on it still works. The song is not in the link — an audio file
+cannot travel in one — so whoever opens it brings their own.
+
 **The picker** searches Wikimedia Commons, which needs no key, answers cross-origin, and states a
 licence for every file. Author and licence come back as HTML written by whoever uploaded the file,
 so it is parsed detached from the page and only its text is used.
@@ -64,6 +74,9 @@ pull the retiming and the tempo front end out of the page and check them against
 `test/timing_cases.json` and `test/tempo_cases.json`. Both fixtures were recorded from the Python
 this tool replaced, so the page stays pinned to what that produced rather than to whatever it does
 today. The Pages workflow runs both before deploying.
+
+Everything in `site/media/` — the link preview card and the three example videos — is rendered by
+the page itself. `tools/make-media.mjs` says at the top of the file how to run it.
 
 ## Limitations
 
