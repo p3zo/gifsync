@@ -11,8 +11,7 @@ get held for different lengths. Mark the frames the beat should land on, mark th
 song, and the animation is stretched so the two line up. The output is an mp4 of the retimed
 animation with the audio muxed in, looped to the length of the audio.
 
-[The examples](https://p3zo.github.io/gifsync/examples/) are the same GIF and the same bar timed
-three ways, with sound. The page itself explains how to use it, and also runs from
+The page itself explains how to use it, and also runs from
 [site/index.html](site/index.html) off disk. This file is about how it works.
 
 ## How it works
@@ -69,8 +68,9 @@ pull the retiming and the tempo front end out of the page and check them against
 this tool replaced, so the page stays pinned to what that produced rather than to whatever it does
 today. The Pages workflow runs both before deploying.
 
-Everything in `site/media/` — the link preview card and the three example videos — is rendered by
-the page itself. `tools/make-media.mjs` says at the top of the file how to run it.
+The link preview card and video in `site/media/` are rendered by the page itself, and the bundled
+example GIF is drawn from scratch. `tools/make-media.mjs` and `tools/make-example-gif.mjs` each say
+at the top of the file how to run them.
 
 ## Limitations
 

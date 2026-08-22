@@ -44,135 +44,6 @@
   "codeRepository": "https://github.com/p3zo/gifsync"
 }
 </script>
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "HowTo",
-  "name": "How to sync a GIF to the beat of a song",
-  "description": "Retime a GIF's frames so its animation lands on the beat of a song, and save the result as an MP4.",
-  "totalTime": "PT3M",
-  "tool": [
-    {
-      "@type": "HowToTool",
-      "name": "Gifsync"
-    }
-  ],
-  "supply": [
-    {
-      "@type": "HowToSupply",
-      "name": "An animated GIF"
-    },
-    {
-      "@type": "HowToSupply",
-      "name": "An audio file"
-    }
-  ],
-  "step": [
-    {
-      "@type": "HowToStep",
-      "position": 1,
-      "name": "Drop in a GIF",
-      "text": "Drop in a GIF. Gifsync marks the frames it thinks the beat should land on."
-    },
-    {
-      "@type": "HowToStep",
-      "position": 2,
-      "name": "Drop in a song",
-      "text": "Drop in a song. It works out the tempo and marks the first few beats."
-    },
-    {
-      "@type": "HowToStep",
-      "position": 3,
-      "name": "Fix what it got wrong",
-      "text": "Fix what it got wrong. Move the marks, type the tempo, or tap it out."
-    },
-    {
-      "@type": "HowToStep",
-      "position": 4,
-      "name": "Choose how often the GIF hits, and what happens between beats",
-      "text": "Choose how often the GIF hits, and what happens between beats."
-    },
-    {
-      "@type": "HowToStep",
-      "position": 5,
-      "name": "Play the preview, then make the video",
-      "text": "Play the preview, then make the video."
-    }
-  ]
-}
-</script>
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  "mainEntity": [
-    {
-      "@type": "Question",
-      "name": "What if the tempo it guesses is wrong?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "Type it into the tempo box, or tap the button in time with the music. Clicking the waveform where you hear a beat works too."
-      }
-    },
-    {
-      "@type": "Question",
-      "name": "What if the song's beats are not evenly spaced?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "One render holds one tempo. The marks on the waveform set that tempo by their average spacing, and the first mark sets where the video starts. They are not followed one at a time, so a track that drifts, or that someone played by hand, cannot be matched all the way through. Mark a stretch that is steady and render that. Moving the first mark shifts the whole animation with it, which is how you land it somewhere other than the downbeat."
-      }
-    },
-    {
-      "@type": "Question",
-      "name": "How many beats should one loop last?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "Your call. Mark eight frames and the loop covers eight beats. Pick a count that divides the frame count, or some beats hold a frame more than others and the animation stutters. The frame timing page has the arithmetic."
-      }
-    },
-    {
-      "@type": "Question",
-      "name": "What does the easing do?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "Even spreads the beat across the frames at a constant speed, so only the marked frames land on it. The eased curves hold the middle frames and flash through the ones either side of the beat, so the motion snaps. The examples have both, with sound."
-      }
-    },
-    {
-      "@type": "Question",
-      "name": "Does Gifsync upload my GIF or my song?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "No. Both are decoded, retimed and encoded in the page. It fetches a tempo model the first time you ask it to listen to a song, and counts page views with Google Analytics. Neither carries anything about your files."
-      }
-    },
-    {
-      "@type": "Question",
-      "name": "Why an MP4 and not a GIF?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "A GIF cannot carry audio. It also stores frame delays in hundredths of a second, which is too coarse to put a frame on a beat."
-      }
-    },
-    {
-      "@type": "Question",
-      "name": "Can it keep the transparent background?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "No. Transparency is flattened onto black. No browser video encoder will keep an alpha channel in an MP4."
-      }
-    },
-    {
-      "@type": "Question",
-      "name": "Which browsers work?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "Recent Chrome, Edge or Safari. It needs WebCodecs, and says so on load if anything is missing."
-      }
-    }
-  ]
-}
-</script>
 
 <!-- Page views only. Nothing about the gif or the song is measured or sent anywhere: both
      are decoded, retimed and encoded in this tab and never leave it. Off a file:// url
@@ -390,21 +261,15 @@ input[type=color] { width: 2.4rem; height: 1.7rem; padding: 1px; border: 1px sol
 
 /* The reading matter under the tool. It is not part of using the thing, so it takes the
    width of a column of text rather than the width of the page. */
-.prose { max-width: 46rem; margin: 2.75rem auto 0; }
+/* the same width as main, so the reading column starts where the tool does */
+.prose { max-width: 78rem; margin: 2.75rem auto 0; }
+.prose > * { max-width: 46rem; }
 .prose h2 { display: block; font-size: 1.05rem; margin: 2rem 0 .6rem; }
-.prose h3 { font-size: .925rem; margin: 1.25rem 0 .3rem; }
 .prose p, .prose li { color: var(--dim); font-size: .925rem; }
 .prose p { margin: 0 0 .8rem; }
 .prose ol, .prose ul { margin: 0 0 .8rem; padding-left: 1.25rem; }
 .prose li { margin-bottom: .35rem; }
-.prose strong { color: var(--ink); font-weight: 600; }
 .prose a { color: var(--ink); }
-.prose .scroll { overflow-x: auto; margin-bottom: .8rem; }
-.prose table { border-collapse: collapse; font-size: .875rem; width: 100%; }
-.prose th, .prose td { border-bottom: 1px solid var(--line); padding: .35rem .7rem .35rem 0;
-  text-align: left; white-space: nowrap; }
-.prose th { color: var(--ink); font-weight: 600; }
-.prose td { color: var(--dim); font-variant-numeric: tabular-nums; }
 
 /* Anything transient goes to the same corner, so no part of the page has to keep room
    free for a message that is usually not there. */
@@ -608,47 +473,6 @@ details.more .row { margin-top: .6rem; }
   <li>Play the preview, then make the video.</li>
 </ol>
 
-<h2>Questions</h2>
-
-<h3>What if the tempo it guesses is wrong?</h3>
-<p>Type it into the tempo box, or tap the button in time with the music. Clicking the
-waveform where you hear a beat works too.</p>
-
-<h3>What if the song's beats are not evenly spaced?</h3>
-<p>One render holds one tempo. The marks on the waveform set that tempo by their average
-spacing, and the first mark sets where the video starts. They are not followed one at a
-time, so a track that drifts, or that someone played by hand, cannot be matched all the way
-through. Mark a stretch that is steady and render that. Moving the first mark shifts the
-whole animation with it, which is how you land it somewhere other than the downbeat.</p>
-
-<h3>How many beats should one loop last?</h3>
-<p>Your call. Mark eight frames and the loop covers eight beats. Pick a count that divides
-the frame count, or some beats hold a frame more than others and the animation stutters.
-<a href="bpm-frame-timing/">The frame timing page</a> has the arithmetic.</p>
-
-<h3>What does the easing do?</h3>
-<p>Even spreads the beat across the frames at a constant speed, so only the marked frames
-land on it. The eased curves hold the middle frames and flash through the ones either side
-of the beat, so the motion snaps. <a href="examples/">The examples</a> have both, with
-sound.</p>
-
-<h3>Does Gifsync upload my GIF or my song?</h3>
-<p>No. Both are decoded, retimed and encoded in the page. It fetches a tempo model the
-first time you ask it to listen to a song, and counts page views with Google Analytics.
-Neither carries anything about your files.</p>
-
-<h3>Why an MP4 and not a GIF?</h3>
-<p>A GIF cannot carry audio. It also stores frame delays in hundredths of a second, which
-is too coarse to put a frame on a beat.</p>
-
-<h3>Can it keep the transparent background?</h3>
-<p>No. Transparency is flattened onto black. No browser video encoder will keep an alpha
-channel in an MP4.</p>
-
-<h3>Which browsers work?</h3>
-<p>Recent Chrome, Edge or Safari. It needs WebCodecs, and says so on load if anything is
-missing.</p>
-
 </article>
 
 <footer>
@@ -656,6 +480,7 @@ missing.</p>
     href="https://policies.google.com/technologies/partner-sites" target="_blank"
     rel="noopener">Google Analytics</a>, which sets cookies.</span>
   <div class="links">
+    <a href="bpm-frame-timing/">Frame timing calculator</a>
     <a href="https://github.com/p3zo/gifsync" target="_blank" rel="noopener">View source on GitHub</a>
     <a href="https://ko-fi.com/patricio_" target="_blank" rel="noopener">Support the developer</a>
   </div>
