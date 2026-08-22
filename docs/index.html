@@ -70,6 +70,8 @@ label { display: inline-flex; align-items: center; gap: .4rem; font-size: .875re
 input[type=number], select { font: inherit; font-size: .875rem; padding: .3rem .4rem;
   border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
 input[type=number] { width: 6rem; }
+input[type=color] { width: 2.4rem; height: 1.7rem; padding: 1px; border: 1px solid var(--line);
+  border-radius: 6px; background: var(--bg); }
 /* Each kind of mark on the waveform has its own shape as well as its own colour, and
    the legend draws that shape rather than a colour swatch. */
 .legend { gap: 1.25rem; }
@@ -256,6 +258,7 @@ details.more .row { margin-top: .6rem; }
         </select>
       </label>
       <label><input type="checkbox" id="clickTrack"> Play a click on each beat</label>
+      <label>Background <input type="color" id="bgColor" value="#000000"></label>
     </div>
   </details>
   <div class="row"><span class="say" id="timingSummary"></span></div>
@@ -501,13 +504,20 @@ function buildBeatStrip() {
   });
 }
 
+// No browser's video encoder will keep an alpha channel, so a transparent pixel has to
+// become some colour on the way into the mp4. Everything that shows a frame paints that
+// colour first, so what the preview shows is what the render produces.
+function paintFrame(ctx, frame, width, height) {
+  ctx.fillStyle = $("bgColor").value;
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(state.frames[frame], 0, 0);
+}
+
 function drawFrame() {
   for (const id of ["frameCanvas", "previewCanvas"]) {
     // The preview canvas tracks the selected frame while it is idle, so it is never blank
     if (id === "previewCanvas" && playback) continue;
-    const ctx = $(id).getContext("2d");
-    ctx.clearRect(0, 0, state.width, state.height);
-    ctx.drawImage(state.frames[state.cur], 0, 0);
+    paintFrame($(id).getContext("2d"), state.cur, state.width, state.height);
   }
 }
 
@@ -859,9 +869,7 @@ function tickPlayback() {
       if (i < 0) i = currentTiming.durations.length - 1;
 
       const frame = currentTiming.order[i];
-      const ctx = $("previewCanvas").getContext("2d");
-      ctx.clearRect(0, 0, state.width, state.height);
-      ctx.drawImage(state.frames[frame], 0, 0);
+      paintFrame($("previewCanvas").getContext("2d"), frame, state.width, state.height);
       $("previewPos").innerHTML =
         `Beat <b>${Math.floor(ms / currentTiming.msPerBeat) + 1}</b>, ${(ms / 1000).toFixed(1)}s in`;
     }
@@ -886,6 +894,8 @@ function tapBeat() {
 }
 
 $("tapBeatBtn").onclick = tapBeat;
+
+$("bgColor").oninput = () => { drawFrame(); refresh(); };
 
 /* -------------------------------------------------------------- click track */
 
@@ -1587,8 +1597,7 @@ async function encodeVideo(schedule, width, height) {
   for (let i = 0; i < schedule.length; i++) {
     const { frame, tsUs, durationUs } = schedule[i];
 
-    ctx.clearRect(0, 0, width, height);
-    ctx.drawImage(state.frames[frame], 0, 0);
+    paintFrame(ctx, frame, width, height);
 
     const keyFrame = tsUs - lastKeyUs >= 2e6;
     if (keyFrame) lastKeyUs = tsUs;

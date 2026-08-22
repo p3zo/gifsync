@@ -92,7 +92,10 @@ today. The Pages workflow runs both before deploying.
 - **A frame shorter than a display refresh will not read**, however exactly it is timed. The eased
   curves reach that first, since their shortest frames sit right at the beat; the page warns when
   any duration falls below it.
-- **Transparency is not preserved.**
+- **Transparency is flattened onto a colour**, black unless you pick another under *More options*,
+  and the preview shows the same one. It cannot be kept: Chrome's `VideoEncoder` refuses
+  `alpha: "keep"` outright for every codec, so an alpha channel would mean a Firefox-only output in
+  a WebM container.
 - **Finding the tempo needs the page served**, not opened off the filesystem, and a network
   connection the first time so TensorFlow.js can load. *Try an example* needs it served for the same
   reason. Off a `file://` url both are disabled and say why; everything else works from a file.
