@@ -34,8 +34,10 @@ fiddly controls stay folded away until you go looking for them.
 The waveform shows the song's beats, where every beat frame of the animation will land, and where
 the animation loops. The preview plays the two together, round and round from the downbeat.
 Changing the tempo while it is playing re-times the animation and the click track underneath it, so
-you can nudge it until it locks. Then make the video: it plays on the page, with a button to
-download it.
+you can nudge it until it locks. Then **Make the video**, and the mp4 saves itself to wherever your
+downloads go — you already have something better than this page for watching it back. Progress,
+notices and anything that went wrong appear as messages in the bottom corner rather than each
+holding a strip of the page open.
 
 To correct the beat frames: **Suggest beat frames** re-runs the suggestion at whatever count you
 ask for, or step through with the arrow keys and mark frames with space, or press **Play the GIF**
