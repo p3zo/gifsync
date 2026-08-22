@@ -171,6 +171,7 @@ details.more .row { margin-top: .6rem; }
       <button id="prevBtn">&#9664;</button>
       <button id="nextBtn">&#9654;</button>
       <button id="markBtn" class="primary">Mark this frame (space)</button>
+      <button id="undoMarkBtn">Undo</button>
       <button id="clearBtn">Clear all marks</button>
       <span class="say" id="framePos"></span>
     </div>
@@ -191,6 +192,7 @@ details.more .row { margin-top: .6rem; }
     <canvas id="wave"></canvas>
     <div class="row">
       <button id="tapBeatBtn">Tap a beat (B)</button>
+      <button id="undoBeatBtn">Undo</button>
       <button id="clearBeatsBtn">Clear all beats</button>
       <span class="say" id="audioSummary"></span>
     </div>
@@ -338,6 +340,17 @@ export function getFrameOrder(firstBeatFrame, nFrames) {
 
 let rendered = false;
 
+// Marking is a lot of small clicks and one of them is always a slip. Each side keeps its
+// own history of what it looked like before the last change; 50 deep is more than anyone
+// walks back, and the snapshots are a handful of numbers each.
+const UNDO_LIMIT = 50;
+const markHistory = [], beatHistory = [];
+
+function remember(history, snapshot) {
+  history.push(snapshot);
+  if (history.length > UNDO_LIMIT) history.shift();
+}
+
 const state = {
   gifFile: null, frames: [], width: 0, height: 0, cur: 0, beats: new Set(),
   audioFile: null, audioBuffer: null, audioBeats: [], peaks: null,
@@ -415,6 +428,7 @@ async function loadGif(file) {
   state.height = frames[0].height;
   state.cur = 0;
   state.beats = new Set();
+  markHistory.length = 0;
 
   $("gifDrop").textContent = `${file.name} — ${count} frames, ${state.width}×${state.height}. Drop another to replace.`;
   $("gifBody").hidden = false;
@@ -496,6 +510,7 @@ function step(delta) {
 
 function toggleMark() {
   if (!state.frames.length) return;
+  remember(markHistory, new Set(state.beats));
   state.beats.has(state.cur) ? state.beats.delete(state.cur) : state.beats.add(state.cur);
   refresh();
 }
@@ -504,7 +519,17 @@ wireDrop("gifDrop", "gifInput", loadGif);
 $("prevBtn").onclick = () => step(-1);
 $("nextBtn").onclick = () => step(1);
 $("markBtn").onclick = toggleMark;
-$("clearBtn").onclick = () => { state.beats.clear(); refresh(); };
+$("clearBtn").onclick = () => {
+  remember(markHistory, new Set(state.beats));
+  state.beats.clear();
+  refresh();
+};
+
+$("undoMarkBtn").onclick = () => {
+  if (!markHistory.length) return;
+  state.beats = markHistory.pop();
+  refresh();
+};
 
 addEventListener("keydown", (e) => {
   if (e.target.matches("input, select, textarea")) return;
@@ -536,6 +561,7 @@ async function loadAudio(file) {
   state.audioFile = file;
   state.audioBeats = [];
   state.peaks = null;
+  beatHistory.length = 0;
 
   const total = Math.round(state.audioBuffer.duration);
   $("audioDrop").textContent =
@@ -547,6 +573,11 @@ async function loadAudio(file) {
   loadTempoModel().catch(() => {});
 
   refresh();
+}
+
+// The tempo is read off the beats, so putting a beat back has to put the tempo back with it
+function rememberBeats() {
+  remember(beatHistory, { beats: state.audioBeats.slice(), bpm: $("bpm").value });
 }
 
 // The first beat mark is the downbeat: the moment the animation starts from
@@ -662,6 +693,7 @@ $("wave").onclick = (e) => {
   const tolerance = (8 / box.width) * duration;
   const near = state.audioBeats.findIndex((b) => Math.abs(b - t) < tolerance);
   if (near >= 0) {
+    rememberBeats();
     state.audioBeats.splice(near, 1);
     setTempoFromBeats();
     refresh();
@@ -671,6 +703,7 @@ $("wave").onclick = (e) => {
 };
 
 function addAudioBeat(seconds) {
+  rememberBeats();
   state.audioBeats.push(seconds);
   state.audioBeats.sort((a, b) => a - b);
   setTempoFromBeats();
@@ -684,7 +717,19 @@ function setTempoFromBeats() {
   $("bpm").value = (60 / (span / (state.audioBeats.length - 1))).toFixed(1);
 }
 
-$("clearBeatsBtn").onclick = () => { state.audioBeats = []; refresh(); };
+$("clearBeatsBtn").onclick = () => {
+  rememberBeats();
+  state.audioBeats = [];
+  refresh();
+};
+
+$("undoBeatBtn").onclick = () => {
+  if (!beatHistory.length) return;
+  const previous = beatHistory.pop();
+  state.audioBeats = previous.beats;
+  $("bpm").value = previous.bpm;
+  refresh();
+};
 
 wireDrop("audioDrop", "audioInput", loadAudio);
 
@@ -1088,6 +1133,9 @@ function refresh() {
     c.classList.toggle("cur", i === state.cur);
     c.classList.toggle("beat", state.beats.has(i));
   });
+
+  $("undoMarkBtn").disabled = !markHistory.length;
+  $("undoBeatBtn").disabled = !beatHistory.length;
 
   buildBeatStrip();
   for (const item of $("beatStrip").children) {
