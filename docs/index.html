@@ -48,8 +48,9 @@ h1 { font-size: 1.3rem; margin: 0 0 .4rem; letter-spacing: -.01em; }
 #intro { margin: 0; max-width: 46rem; color: var(--dim); font-size: .925rem; }
 footer {
   max-width: 78rem; margin: 2rem auto 0; padding-top: .9rem; border-top: 1px solid var(--line);
-  display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; font-size: .8rem; color: var(--dim);
+  display: grid; justify-items: start; gap: .5rem; font-size: .8rem; color: var(--dim);
 }
+footer .links { display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; }
 footer a { color: var(--ink); }
 footer span a { color: inherit; }
 header .row { margin-top: .9rem; }
@@ -393,8 +394,10 @@ details.more .row { margin-top: .6rem; }
   <span>Your GIF and song never leave your browser. Page views are counted with <a
     href="https://policies.google.com/technologies/partner-sites" target="_blank"
     rel="noopener">Google Analytics</a>, which sets cookies.</span>
-  <a href="https://github.com/p3zo/gifsync" target="_blank" rel="noopener">Source on GitHub</a>
-  <a href="https://ko-fi.com/patricio_" target="_blank" rel="noopener">Support the developer</a>
+  <div class="links">
+    <a href="https://github.com/p3zo/gifsync" target="_blank" rel="noopener">View source on GitHub</a>
+    <a href="https://ko-fi.com/patricio_" target="_blank" rel="noopener">Support the developer</a>
+  </div>
 </footer>
 
 <dialog id="picker">
