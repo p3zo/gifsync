@@ -156,6 +156,8 @@ details.spaced { margin-top: 1.1rem; }
   flex: 1; min-width: 12rem; font: inherit; font-size: .875rem; padding: .35rem .5rem;
   border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink);
 }
+#pickerChips { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .6rem; }
+#pickerChips button { font-size: .8rem; padding: .2rem .65rem; border-radius: 999px; color: var(--dim); }
 #pickerGrid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: .6rem;
   max-height: 62vh; overflow-y: auto; padding-top: .3rem;
@@ -371,6 +373,14 @@ details.more .row { margin-top: .6rem; }
     <input type="search" id="pickerQuery" placeholder="Search, or leave empty to browse">
     <button id="pickerSearch" class="primary">Search</button>
     <button id="pickerClose">Close</button>
+  </div>
+  <div id="pickerChips">
+    <button>dance</button>
+    <button>cat</button>
+    <button>walking</button>
+    <button>muybridge</button>
+    <button>fire</button>
+    <button>animation</button>
   </div>
   <div class="say" id="pickerNote"></div>
   <div id="pickerGrid"></div>
@@ -918,6 +928,15 @@ $("browseBtn").onclick = () => {
 };
 $("pickerClose").onclick = () => $("picker").close();
 $("pickerSearch").onclick = runPickerSearch;
+// What the catalogue is actually good for is not obvious from an empty search box, and
+// these terms are where the cyclic, clearly-accented animations turn out to be
+for (const chip of document.querySelectorAll("#pickerChips button")) {
+  chip.onclick = () => {
+    $("pickerQuery").value = chip.textContent;
+    runPickerSearch();
+  };
+}
+
 $("pickerQuery").onkeydown = (e) => {
   if (e.key === "Enter") { e.preventDefault(); runPickerSearch(); }
   e.stopPropagation();
