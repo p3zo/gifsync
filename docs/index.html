@@ -271,6 +271,7 @@ details.more .row { margin-top: .6rem; }
   </div>
   <div class="say warn note" id="codecNote"></div>
   <div class="say note" id="renderStatus"></div>
+  <div class="empty" id="resultEmpty">Your finished video will appear here.</div>
   <div id="result" hidden>
     <video id="resultVideo" controls playsinline></video>
     <div class="row">
@@ -718,9 +719,11 @@ function drawWave(playheadSeconds = null) {
     const x = at(t);
     beatLines.moveTo(x, 0);
     beatLines.lineTo(x, h * 0.4);
-    flags.moveTo(x - 4, 0);
-    flags.lineTo(x + 4, 0);
-    flags.lineTo(x, 7);
+    // a flag on the very first beat would otherwise hang off the left edge
+    const fx = Math.min(Math.max(x, 4), w - 4);
+    flags.moveTo(fx - 4, 0);
+    flags.lineTo(fx + 4, 0);
+    flags.lineTo(fx, 7);
     flags.closePath();
   }
   ctx.strokeStyle = css.getPropertyValue("--accent");
@@ -1226,6 +1229,7 @@ function refresh() {
 
   $("previewCanvas").hidden = !ready.gif;
   $("previewEmpty").hidden = ready.gif;
+  $("resultEmpty").hidden = rendered;
   syncTransport();
 
   const missing = !ready.gif && !ready.audio ? "Add a GIF and a song first."
