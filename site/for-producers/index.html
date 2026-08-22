@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Match a GIF to your project tempo</title>
+<meta name="description" content="Lock a GIF loop to the BPM of a track you are working on and export an MP4 you can drop back on the timeline. Free, in the browser, nothing uploaded.">
+<link rel="canonical" href="https://p3zo.github.io/gifsync/for-producers/">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../pages.css">
+<meta property="og:image" content="https://p3zo.github.io/gifsync/media/social-card.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://p3zo.github.io/gifsync/for-producers/">
+<meta property="og:title" content="Match a GIF to your project tempo">
+<meta property="og:description" content="Lock a GIF loop to the BPM of a track you are working on and export an MP4 you can drop back on the timeline.">
+</head>
+<body>
+
+<nav><a href="../">← Gifsync</a></nav>
+
+<h1>Match a GIF to your project tempo</h1>
+<p class="lead">Your DAW knows the tempo exactly. Type it in rather than letting anything
+estimate it, and the loop will hold for as long as the bounce runs.</p>
+
+<a class="cta" href="../">Open Gifsync</a>
+
+<h2>Bars, beats and marks</h2>
+<p>Gifsync counts in beats, not bars. In 4/4 a one-bar loop is four beats, so a GIF you
+want to fill one bar gets four marked frames; two bars gets eight. The marks are what
+decide it — the number in the box is only the starting suggestion.</p>
+<p>Pick a beat count that divides the GIF's frame count. A 24-frame GIF is happy at 4, 6, 8
+or 12 beats. At 5 it has to hold some beats for five frames and others for four, and that
+20% swing in speed is visible on a loop you are going to stare at.
+<a href="../bpm-frame-timing/">The frame timing page</a> has the arithmetic.</p>
+
+<h2>Bounce the audio on a bar line</h2>
+<p>The video starts at the first beat you mark on the waveform, not at zero, and runs to
+the end of the audio. So bounce a section that begins exactly on a downbeat, drop it in,
+and put the first mark at 0.00s — then the animation's first marked frame is on your
+downbeat and every later one lands on a beat too.</p>
+<p>If the bounce starts with a bar of silence or a pickup, mark the first real downbeat
+instead and the video will start there.</p>
+
+<h2>Half time is usually the answer</h2>
+<p>A GIF drawn to loop about once a second does not have to hit every beat of a 128 BPM
+track. Setting it to hit every two beats halves the apparent speed without slowing the
+animation down — the frames are simply spread over twice as much song.
+<a href="../examples/">The examples page</a> has the same loop at both, with sound.</p>
+
+<h2>What you get back</h2>
+<p>An MP4 with the audio muxed in, at the GIF's own pixel dimensions, with the frame
+timestamps written to the microsecond. Drop it straight back on a video timeline as a
+visualiser, or post it as it is. Nothing is uploaded on the way: the decoding, the retiming
+and the encoding all happen in the page.</p>
+
+<a class="cta" href="../">Line a GIF up with your track</a>
+
+<footer>
+  <a href="../">Gifsync</a>
+  <a href="../examples/">Examples</a>
+  <a href="../bpm-frame-timing/">Frame timing calculator</a>
+  <a href="https://github.com/p3zo/gifsync">Source on GitHub</a>
+</footer>
+
+</body>
+</html>

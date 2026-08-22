@@ -1,0 +1,82 @@
+/*
+ * The pages around the tool. The tool itself stays one self-contained file so it works
+ * straight off the filesystem; these are ordinary pages and can share a stylesheet.
+ * The palette is the tool's, so moving between them does not look like leaving.
+ */
+
+:root {
+  --bg: #ffffff; --panel: #f4f4f5; --line: #d9d9de; --ink: #18181b;
+  --dim: #6b6b76; --accent: #d6336c; --accent-ink: #ffffff;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131316; --panel: #1c1c21; --line: #33333c; --ink: #ececf0;
+    --dim: #9a9aa6; --accent: #f06595; --accent-ink: #1a1a1f;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0 auto; padding: 1.25rem 1.25rem 3rem; max-width: 46rem;
+  background: var(--bg); color: var(--ink);
+  font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+nav { font-size: .8rem; padding-bottom: 1.5rem; }
+nav a { color: var(--dim); }
+
+h1 { font-size: 1.45rem; line-height: 1.25; letter-spacing: -.015em; margin: 0 0 .6rem; }
+h2 { font-size: 1.05rem; margin: 2.25rem 0 .6rem; }
+h3 { font-size: .95rem; margin: 1.5rem 0 .35rem; }
+p, li { color: var(--dim); font-size: .95rem; }
+p { margin: 0 0 .85rem; }
+ol, ul { margin: 0 0 .85rem; padding-left: 1.25rem; }
+li { margin-bottom: .35rem; }
+strong { color: var(--ink); font-weight: 600; }
+a { color: var(--ink); }
+.lead { font-size: 1.05rem; }
+
+/* The one link on every page that is meant to be pressed rather than read */
+.cta {
+  display: inline-block; margin: .4rem 0 1.5rem; padding: .5rem .9rem; border-radius: 6px;
+  background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: .925rem;
+  text-decoration: none;
+}
+
+.scroll { overflow-x: auto; margin-bottom: .85rem; }
+table { border-collapse: collapse; font-size: .875rem; width: 100%; }
+th, td { border-bottom: 1px solid var(--line); padding: .35rem .7rem .35rem 0;
+  text-align: left; white-space: nowrap; }
+th { color: var(--ink); font-weight: 600; }
+td { color: var(--dim); font-variant-numeric: tabular-nums; }
+
+.calc {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 1rem; margin-bottom: 1.25rem;
+}
+.calc .row { display: flex; flex-wrap: wrap; gap: .9rem; align-items: center; }
+.calc label { font-size: .875rem; color: var(--ink); display: flex; align-items: center; gap: .4rem; }
+.calc input { font: inherit; font-size: .875rem; width: 6rem; padding: .3rem .4rem;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.calc output { display: block; margin-top: .9rem; font-family: var(--mono); font-size: .875rem;
+  color: var(--ink); line-height: 1.7; }
+.calc .warn { color: var(--accent); }
+
+/* Same gif, same song, one setting apart: the videos are the argument, so they get the room */
+.gallery { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); }
+.gallery figure { margin: 0; }
+.gallery video {
+  /* the width and height attributes are on the element so the row does not jump while the
+     poster loads; without height:auto they also win over the ratio and squash it flat */
+  width: 100%; height: auto; aspect-ratio: 1; border-radius: 10px; background: #000;
+  /* the example is pixel art and the file is 96x96; smoothing it turns it to mush */
+  image-rendering: pixelated;
+}
+.gallery figcaption { font-size: .875rem; color: var(--dim); margin-top: .5rem; }
+.gallery figcaption strong { display: block; }
+
+footer {
+  margin-top: 3rem; padding-top: .9rem; border-top: 1px solid var(--line);
+  font-size: .8rem; color: var(--dim); display: flex; flex-wrap: wrap; gap: .4rem 1.1rem;
+}

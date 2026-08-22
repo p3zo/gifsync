@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BPM to frame timing: how long to hold each GIF frame</title>
+<meta name="description" content="Work out how long to hold each frame of a GIF so its loop lands on the beat, at any tempo. Includes the catch that GIF frame delays are stored in hundredths of a second.">
+<link rel="canonical" href="https://p3zo.github.io/gifsync/bpm-frame-timing/">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../pages.css">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://p3zo.github.io/gifsync/bpm-frame-timing/">
+<meta property="og:title" content="BPM to frame timing: how long to hold each GIF frame">
+<meta property="og:description" content="Work out how long to hold each frame of a GIF so its loop lands on the beat, at any tempo.">
+<meta property="og:image" content="https://p3zo.github.io/gifsync/media/social-card.png">
+<meta name="twitter:card" content="summary_large_image">
+</head>
+<body>
+
+<nav><a href="../">← Gifsync</a></nav>
+
+<h1>BPM to frame timing</h1>
+<p class="lead">How long one beat lasts at a given tempo, and how long to hold each frame of
+a GIF so that a whole number of frames fills it exactly.</p>
+
+<div class="calc">
+  <div class="row">
+    <label>Tempo <input type="number" id="bpm" value="120" min="1" max="999" step="0.1"> BPM</label>
+    <label>Frames per beat <input type="number" id="fpb" value="8" min="1" max="200" step="1"></label>
+  </div>
+  <output id="out"></output>
+</div>
+
+<h2>Why this is not simply beat length divided by frames</h2>
+<p>It is, if you are writing the timing into a video. It is not, if you are writing it back
+into a GIF. The GIF format stores a delay per frame in <strong>hundredths of a
+second</strong>, so the only durations a GIF can express are 10ms, 20ms, 30ms and so on. At
+120 BPM over eight frames a beat wants 62.5ms a frame, and the nearest a GIF can hold is
+60ms or 70ms. Six-tenths of a frame is not much on its own; repeated every beat for the
+length of a song it is the difference between locked and visibly sliding.</p>
+<p>Short delays are worse. Most browsers refuse to honour a delay of one hundredth of a
+second and substitute a tenth instead, which is a factor of ten, so a fast loop written as
+10ms a frame plays at a tenth of the speed you asked for.</p>
+<p>This is why <a href="../">Gifsync</a> writes an MP4 rather than a GIF: frame timestamps
+in an MP4 are written to the microsecond, so the beats land where they were put.</p>
+
+<h2>One beat, and one frame of it</h2>
+<div class="scroll"><table>
+  <thead><tr><th>Tempo</th><th>One beat</th><th>4 frames</th><th>8 frames</th><th>12 frames</th><th>16 frames</th></tr></thead>
+  <tbody>
+    <tr><td>60 BPM</td><td>1000.0ms</td><td>250.0ms</td><td>125.0ms</td><td>83.3ms</td><td>62.5ms</td></tr>
+    <tr><td>70 BPM</td><td>857.1ms</td><td>214.3ms</td><td>107.1ms</td><td>71.4ms</td><td>53.6ms</td></tr>
+    <tr><td>80 BPM</td><td>750.0ms</td><td>187.5ms</td><td>93.8ms</td><td>62.5ms</td><td>46.9ms</td></tr>
+    <tr><td>90 BPM</td><td>666.7ms</td><td>166.7ms</td><td>83.3ms</td><td>55.6ms</td><td>41.7ms</td></tr>
+    <tr><td>100 BPM</td><td>600.0ms</td><td>150.0ms</td><td>75.0ms</td><td>50.0ms</td><td>37.5ms</td></tr>
+    <tr><td>110 BPM</td><td>545.5ms</td><td>136.4ms</td><td>68.2ms</td><td>45.5ms</td><td>34.1ms</td></tr>
+    <tr><td>120 BPM</td><td>500.0ms</td><td>125.0ms</td><td>62.5ms</td><td>41.7ms</td><td>31.2ms</td></tr>
+    <tr><td>128 BPM</td><td>468.8ms</td><td>117.2ms</td><td>58.6ms</td><td>39.1ms</td><td>29.3ms</td></tr>
+    <tr><td>130 BPM</td><td>461.5ms</td><td>115.4ms</td><td>57.7ms</td><td>38.5ms</td><td>28.8ms</td></tr>
+    <tr><td>140 BPM</td><td>428.6ms</td><td>107.1ms</td><td>53.6ms</td><td>35.7ms</td><td>26.8ms</td></tr>
+    <tr><td>150 BPM</td><td>400.0ms</td><td>100.0ms</td><td>50.0ms</td><td>33.3ms</td><td>25.0ms</td></tr>
+    <tr><td>160 BPM</td><td>375.0ms</td><td>93.8ms</td><td>46.9ms</td><td>31.2ms</td><td>23.4ms</td></tr>
+    <tr><td>170 BPM</td><td>352.9ms</td><td>88.2ms</td><td>44.1ms</td><td>29.4ms</td><td>22.1ms</td></tr>
+    <tr><td>174 BPM</td><td>344.8ms</td><td>86.2ms</td><td>43.1ms</td><td>28.7ms</td><td>21.6ms</td></tr>
+    <tr><td>180 BPM</td><td>333.3ms</td><td>83.3ms</td><td>41.7ms</td><td>27.8ms</td><td>20.8ms</td></tr>
+  </tbody>
+</table></div>
+<p>A frame held for less than one refresh of the display — about 16.7ms on a 60Hz screen —
+will not be seen however exactly it is timed. The rows near the bottom of that table are
+past the point where a viewer can tell one frame from the next.</p>
+
+<h2>Going the other way: frames per beat from a frame count</h2>
+<p>If the GIF is fixed and the question is how many beats its loop should cover, divide the
+frame count by the beats you want and check the answer is a whole number. Twenty frames
+over eight beats gives 2.5, which is not, so some beats hold three frames and others hold
+two — a 50% swing in speed, and quite visible. Twenty frames over ten beats gives two, and
+is even all the way round. Pick a beat count that divides the frame count.</p>
+
+<a class="cta" href="../">Line a GIF up with a song</a>
+
+<footer>
+  <a href="../">Gifsync</a>
+  <a href="https://github.com/p3zo/gifsync">Source on GitHub</a>
+</footer>
+
+<script>
+const bpm = document.getElementById("bpm");
+const fpb = document.getElementById("fpb");
+const out = document.getElementById("out");
+
+function show() {
+  const tempo = Number(bpm.value), frames = Math.round(Number(fpb.value));
+  if (!(tempo > 0) || !(frames > 0)) {
+    out.textContent = "Give a tempo above zero and at least one frame.";
+    return;
+  }
+
+  const beat = 60000 / tempo;
+  const each = beat / frames;
+
+  // What a GIF could actually store, and what that costs. Never below one hundredth,
+  // which is the shortest delay the format has.
+  const gif = Math.max(10, Math.round(each / 10) * 10);
+  const driftPerMinute = Math.abs(gif * frames - beat) * tempo;
+
+  const lines = [
+    `One beat at ${tempo} BPM lasts ${beat.toFixed(1)}ms.`,
+    `Spread evenly, each of ${frames} frames is held ${each.toFixed(2)}ms.`,
+    `Written into a GIF that becomes ${gif}ms a frame, drifting about ` +
+      `${Math.round(driftPerMinute)}ms every minute.`,
+  ];
+  if (each < 16.7) lines.push("Shorter than one refresh of a 60Hz display: it will not be seen.");
+
+  out.replaceChildren();
+  for (const line of lines) {
+    const div = document.createElement("div");
+    if (line.startsWith("Shorter")) div.className = "warn";
+    div.textContent = line;
+    out.append(div);
+  }
+}
+
+bpm.oninput = show;
+fpb.oninput = show;
+show();
+</script>
+
+</body>
+</html>

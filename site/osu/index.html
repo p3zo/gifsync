@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sync a GIF to an osu! beatmap's BPM</title>
+<meta name="description" content="Take the BPM off a beatmap and retime a GIF so its loop lands on it, then save an MP4. Free, in the browser, no install and no .NET.">
+<link rel="canonical" href="https://p3zo.github.io/gifsync/osu/">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../pages.css">
+<meta property="og:image" content="https://p3zo.github.io/gifsync/media/social-card.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://p3zo.github.io/gifsync/osu/">
+<meta property="og:title" content="Sync a GIF to an osu! beatmap's BPM">
+<meta property="og:description" content="Take the BPM off a beatmap and retime a GIF so its loop lands on it, then save an MP4.">
+</head>
+<body>
+
+<nav><a href="../">← Gifsync</a></nav>
+
+<h1>Sync a GIF to an osu! beatmap's BPM</h1>
+<p class="lead">You already know the tempo — the map states it. That is the hard half of
+this problem solved before you start, so all that is left is deciding which frames of the
+GIF the beat should land on.</p>
+
+<a class="cta" href="../">Open Gifsync</a>
+
+<h2>What this does, and what it does not</h2>
+<p>Gifsync produces a <strong>file</strong>: an MP4 of a GIF whose frames have been retimed
+so the animation locks to a tempo, with the audio in it. That is what you want for a video,
+a Discord post, a thumbnail, or a stream asset.</p>
+<p>It is not a live overlay. The tools that animate a GIF in time with whatever you are
+currently playing — reading the game's now-playing and speeding the animation up and down
+to match — are a different kind of thing, and they run alongside the game rather than
+producing anything you can post. If that is what you are after, this is the wrong page.</p>
+
+<h2>Getting the tempo right</h2>
+<p>Song select shows a BPM for the map, and for a map with one timing point that number is
+the answer: type it into the tempo box rather than letting the page guess. The editor's
+timing panel gives it to more decimal places, which is worth having — at 180 BPM, being a
+tenth of a BPM out costs you a beat every ten minutes, and a whole frame long before that.</p>
+<p>Maps with more than one timing point are a problem. Gifsync holds one tempo for the
+length of the render, so a map that changes speed partway through cannot be matched end to
+end. Cut the section you want at a single tempo and sync against that.</p>
+
+<h2>Marking the GIF</h2>
+<ol>
+  <li>Drop the GIF in. Gifsync marks a first guess at the frames the beat should land on —
+    for most looping animations it lands close.</li>
+  <li>Drop the audio in and type the map's BPM over whatever the estimate came up with.</li>
+  <li>Set how often the GIF hits. At 180 BPM a once-a-beat loop is very fast; every two
+    beats usually reads better.</li>
+  <li>Play the preview, then make the video.</li>
+</ol>
+<p>How many frames you mark decides how many beats one loop covers. If the count does not
+divide the GIF's frame count evenly some beats end up holding a frame more than others,
+which is visible as a stutter — <a href="../bpm-frame-timing/">the frame timing page</a>
+works through why, and Gifsync nudges its own suggestion onto a divisor to avoid it.</p>
+
+<a class="cta" href="../">Line a GIF up with a track</a>
+
+<footer>
+  <a href="../">Gifsync</a>
+  <a href="../examples/">Examples</a>
+  <a href="../bpm-frame-timing/">Frame timing calculator</a>
+  <a href="https://github.com/p3zo/gifsync">Source on GitHub</a>
+</footer>
+
+</body>
+</html>
