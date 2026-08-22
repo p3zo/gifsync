@@ -116,9 +116,16 @@ input[type=number] { width: 6rem; }
   max-height: 15rem; overflow-y: auto; margin: .75rem 0 0; padding: .6rem;
   background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
 }
-#log:empty { display: none; }
-a#download { display: inline-block; margin-top: .75rem; color: var(--accent); font-weight: 600; }
-a#download[hidden] { display: none; }
+#log:empty::before { content: "Nothing yet."; color: var(--dim); }
+a.button {
+  display: inline-block; text-decoration: none; font-size: .875rem; font-weight: 600;
+  padding: .35rem .7rem; border-radius: 6px; border: 1px solid transparent;
+  background: var(--accent); color: var(--accent-ink);
+}
+#resultVideo { display: block; max-width: 100%; max-height: 340px; border-radius: 6px; margin-bottom: .75rem; }
+#result[hidden] { display: none; }
+.note { margin-top: .75rem; }
+.note:empty { display: none; }
 details.more > summary { cursor: pointer; width: fit-content; font-size: .8rem; color: var(--dim); }
 details.more > summary:hover { color: var(--ink); }
 details.more .row { margin-top: .6rem; }
@@ -242,11 +249,21 @@ details.more .row { margin-top: .6rem; }
   <p class="why" id="secRenderWhy"></p>
   <div class="body">
   <div class="row">
-    <button id="renderBrowserBtn" class="primary">Render</button>
+    <button id="renderBrowserBtn" class="primary">Make the video</button>
   </div>
-  <div class="row"><span class="mono warn" id="codecNote"></span></div>
-  <pre id="log"></pre>
-  <a id="download" hidden>Download</a>
+  <div class="say warn note" id="codecNote"></div>
+  <div class="say note" id="renderStatus"></div>
+  <div id="result" hidden>
+    <video id="resultVideo" controls playsinline></video>
+    <div class="row">
+      <a id="download" class="button primary">Download the video</a>
+      <span class="say" id="resultInfo"></span>
+    </div>
+  </div>
+  <details class="more">
+    <summary>What happened during the render</summary>
+    <pre id="log"></pre>
+  </details>
   </div>
 </section>
 
@@ -1121,6 +1138,11 @@ function log(line) {
   $("log").scrollTop = $("log").scrollHeight;
 }
 
+// One line of plain progress, with the running commentary folded away under the log
+function status(line) {
+  $("renderStatus").textContent = line;
+}
+
 function fail(err) {
   console.error(err);
   log(`ERROR ${err.message}`);
@@ -1395,7 +1417,10 @@ async function encodeVideo(schedule, width, height) {
     if (encoder.encodeQueueSize > 24) {
       await new Promise((r) => { encoder.ondequeue = r; });
     }
-    if (i % 200 === 0) log(`  video ${i}/${schedule.length} frames`);
+    if (i % 200 === 0) {
+      log(`  video ${i}/${schedule.length} frames`);
+      status(`Drawing the video… ${Math.round((100 * i) / schedule.length)}%`);
+    }
     if (failure) throw failure;
   }
 
@@ -1563,19 +1588,23 @@ function readOpusPreSkip(description) {
 function clearRender() {
   rendered = false;
   $("log").textContent = "";
+  status("");
   const link = $("download");
   if (link.href) URL.revokeObjectURL(link.href);
   link.removeAttribute("href");
-  link.hidden = true;
+  // the player has to let go of the url too, or it holds one that has been revoked
+  $("resultVideo").removeAttribute("src");
+  $("resultVideo").load();
+  $("result").hidden = true;
 }
 
 function offerDownload(blob, filename) {
-  const link = $("download");
-  if (link.href) URL.revokeObjectURL(link.href);
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.textContent = `Download ${filename} (${(blob.size / 1e6).toFixed(1)}MB)`;
-  link.hidden = false;
+  const url = URL.createObjectURL(blob);
+  $("download").href = url;
+  $("download").download = filename;
+  $("resultVideo").src = url;
+  $("resultInfo").textContent = `${filename} · ${(blob.size / 1e6).toFixed(1)}MB`;
+  $("result").hidden = false;
 }
 
 function outputName() {
@@ -1599,9 +1628,11 @@ $("renderBrowserBtn").onclick = async () => {
 
     const schedule = buildSchedule(timing, seconds);
     log(`Rendering ${schedule.length} frames over ${seconds.toFixed(2)}s at ${width}×${height}`);
+    status("Drawing the video… 0%");
 
     const video = await encodeVideo(schedule, width, height);
     log(`  video done, ${video.samples.length} samples`);
+    status("Adding the song…");
 
     const audio = await encodeAudio(seconds);
     log(`  audio done, ${audio.codec}, ${audio.samples.length} samples, ` +
@@ -1611,9 +1642,11 @@ $("renderBrowserBtn").onclick = async () => {
     rendered = true;
     refresh();
     log("Done.");
+    status("");
   } catch (err) {
     fail(err);
   } finally {
+    status("");
     button.disabled = false;
   }
 };
