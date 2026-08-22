@@ -55,12 +55,6 @@ covers a whole number of frames, so 20 frames over 8 beats has to alternate 3 an
 swing in speed is plain to see. Ten beats over those 20 frames is even the whole way round. A prime
 frame count has no divisor worth moving to, so it keeps the count it was given.
 
-**Opening a setup from a link.** The page reads `gif` (a Wikimedia Commons file title), `bpm`,
-`marks` (frame numbers), `ease` (`even`, `inout`, `inout-more`) and `hits` off the query string, and
-`demo=1` loads the bundled example. Anything it does not recognise is left alone, so a link that
-comes back with tracking parameters on it still works. The song is not in the link — an audio file
-cannot travel in one — so whoever opens it brings their own.
-
 **The picker** searches Wikimedia Commons, which needs no key, answers cross-origin, and states a
 licence for every file. Author and licence come back as HTML written by whoever uploaded the file,
 so it is parsed detached from the page and only its text is used.

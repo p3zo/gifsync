@@ -23,11 +23,12 @@ const OUT = new URL("../site/media/", import.meta.url).pathname;
 const TMP = new URL("../.media-tmp/", import.meta.url).pathname;
 
 // Same gif and song every time, different settings: what the gallery is showing is the
-// effect of the settings, so nothing else may vary between them.
+// effect of the settings, so nothing else may vary between them. The values are the ones
+// the selects carry, not the labels on them.
 const EXAMPLES = [
-  { name: "demo-even.mp4", query: "?demo=1&ease=even" },
-  { name: "demo-eased.mp4", query: "?demo=1&ease=inout-more" },
-  { name: "demo-half-time.mp4", query: "?demo=1&ease=inout&hits=0.5" },
+  { name: "demo-even.mp4", settings: { interpolation: "linear" } },
+  { name: "demo-eased.mp4", settings: { interpolation: "cubic" } },
+  { name: "demo-half-time.mp4", settings: { interpolation: "quadratic", hits: "0.5" } },
 ];
 
 mkdirSync(OUT, { recursive: true });
@@ -35,17 +36,24 @@ mkdirSync(TMP, { recursive: true });
 
 const browser = await chromium.launch({ channel: "chromium" });
 
-async function loaded(page, query) {
-  await page.goto(BASE + "/" + query, { waitUntil: "load" });
+async function loaded(page, settings = {}) {
+  await page.goto(BASE + "/", { waitUntil: "load" });
+  await page.locator("#exampleBtn").click();
   await page.waitForFunction(() => document.getElementById("previewCanvas").width > 1, null, { timeout: 20000 });
   // the tempo estimate arrives seconds after the song and puts the marks on the waveform
   await page.waitForTimeout(4000);
+  for (const [id, value] of Object.entries(settings)) {
+    // some of these sit under the collapsed "More controls" fold, and a select inside a
+    // closed <details> cannot be clicked
+    await page.evaluate((id) => document.getElementById(id).closest("details")?.setAttribute("open", ""), id);
+    await page.selectOption("#" + id, value);
+  }
   await page.evaluate(() => document.querySelectorAll(".toast").forEach((t) => t.remove()));
 }
 
-for (const { name, query } of EXAMPLES) {
+for (const { name, settings } of EXAMPLES) {
   const page = await browser.newPage();
-  await loaded(page, query);
+  await loaded(page, settings);
   const download = page.waitForEvent("download", { timeout: 120000 });
   await page.locator("#renderBrowserBtn").click();
   await (await download).saveAs(OUT + name);
@@ -67,7 +75,7 @@ console.log("demo.mp4, poster.jpg");
 // the real thing — the gif as the page draws it, and the song's own waveform with the
 // beats marked on it.
 const shots = await browser.newPage({ viewport: { width: 1250, height: 1000 }, deviceScaleFactor: 3, colorScheme: "dark" });
-await loaded(shots, "?demo=1");
+await loaded(shots);
 await shots.locator("#previewCanvas").screenshot({ path: TMP + "gif.png" });
 await shots.locator("#wave").screenshot({ path: TMP + "wave.png" });
 await shots.close();
