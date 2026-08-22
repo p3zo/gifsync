@@ -3,7 +3,7 @@ name: Deploy the beat marker to Pages
 on:
   push:
     branches: [main]
-    paths: ["docs/**", "sync.py", "easing.py", ".github/workflows/pages.yml"]
+    paths: ["docs/**", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
 permissions:
@@ -24,12 +24,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install numpy Pillow
-      # The page carries its own copy of the retiming, so fail the deploy if it has
-      # drifted away from sync.py rather than shipping a marker that disagrees with the CLI
+      # Hold the retiming to the values recorded in timing_cases.json rather than
+      # letting a deploy quietly change how the frames are spaced
       - run: node docs/test_timing.mjs
 
   deploy:

@@ -2,9 +2,12 @@
 
 Reassembles the frames of a GIF to sync its animation to the beat of an audio file.
 
-Uses the [TempoCNN models](https://essentia.upf.edu/models.html#tempocnn) provided by Essentia.
+A GIF stores a duration per frame, so nothing has to be added or dropped to retime one; the frames
+just get held for different lengths. Mark the frames the beat should land on, mark the beats of the
+song, and the animation is stretched so the two line up. The output is an mp4 of the retimed
+animation with the audio muxed in, looped to the length of the audio.
 
-The output is an mp4 of the retimed animation with the audio muxed in, looped to the length of the audio.
+The whole thing is one page: [docs/index.html](docs/index.html). Open it, or use the deployed copy.
 
 ### [Demo 1](./demo/gypsy_alien.mp4)
 
@@ -16,105 +19,71 @@ x [Gypsy Girl by Toman](https://www.youtube.com/watch?v=dKZQRG54vHE).
 Credits: [Nodding Yes GIF](https://giphy.com/gifs/kFTJEiV9nZlhM2juSN)
 x [Epik High - 낙화 (落花) {The Falling Flower}](https://www.youtube.com/watch?v=0J39Amz5o-Y).
 
-## Beat marker
-
-`docs/index.html` is a page for lining a GIF up against a song by eye and ear rather than by
-counting frames. Drop a GIF in and mark the frames the beat should land on. Drop a song in and
-click its beats on the waveform: the first click is the downbeat the animation starts from, and two
-or more give the tempo. The waveform then shows where every beat frame will land, and the preview
-plays the retimed animation over the song. Changing the tempo while it is playing re-times the
-animation and the click track underneath it, so you can nudge the BPM until it locks.
-
-BPM is the song's tempo. **Animation hits** is a separate thing: how often the GIF lands against
-that tempo, so `twice a beat` runs the animation at double speed without pretending the song is
-faster than it is. It is `--tempo_multiplier` under a name that says what it does.
-
-Opened straight off the filesystem the page renders the mp4 itself, using WebCodecs. Served with
-
-    python marker.py
-
-it also offers to render through `sync.py`, trimming the audio to the downbeat first, and to
-estimate the tempo with essentia. From inside the container use `python marker.py --host 0.0.0.0`
-and open <http://localhost:5000>.
-
-The page is deployed to GitHub Pages from `docs/` by `.github/workflows/pages.yml`, which runs the
-drift check first: the page carries its own copy of the retiming, and `node docs/test_timing.mjs`
-diffs it against `sync.py` so the two cannot disagree. The encode does differ on purpose — the
-browser writes exact per-frame timestamps, while `sync.py` goes through ffmpeg's concat demuxer and
-its 40ms grid.
-
 ## Usage
 
-Install [Docker Compose](https://docs.docker.com/compose/install/) and start the Docker daemon.
+Drop a GIF in and step through the frames, marking the ones the beat should land on. Drop a song in
+and click its beats on the waveform, or tap them in with `B` while it plays: the first is the
+downbeat the animation starts from, and two or more give the tempo. `Estimate` reads the tempo off
+the audio instead.
 
-Build the container with Essentia, Tensorflow, and ffmpeg
+The waveform then shows where every beat frame will land and where the animation loops, and the
+preview plays the two together. Changing the tempo while it is playing re-times the animation and
+the click track underneath it, so you can nudge it until it locks. Then render, and download.
 
-    docker compose build
+**BPM** is the song's tempo. **Animation hits** is a separate thing: how often the GIF lands against
+that tempo, so `twice a beat` runs the animation at double speed without pretending the song is
+faster than it is.
 
-Start the container and get a shell inside
+**Easing** distributes each beat across the frames between two marks, and changes the character of
+the movement more than you would expect. `linear` gives every frame the same duration, so the
+animation moves at a constant speed and only its landmarks are on the beat. `cubic` and `quadratic`
+ease in and out, holding the frames midway between beats and flashing through the ones on either
+side of the beat itself, so the motion snaps on the beat and drifts between them. Spreading a 500ms
+beat over eight frames:
 
-    docker compose up -d && docker compose exec app bash
-
-Find an audio file that starts exactly on beat. Find a GIF and label the frames you want to align to the
-beat. Pass them to the `sync.py` script as in the example below.
-
-    python sync.py \
-        --audio_filepath "demo/gypsy.m4a" \
-        --gif_filepath "demo/alien.gif" \
-        --beat_frames 0 9 17 28 36 45 54 63 72 81
-
-##### Optional arguments
-
-    --tempo_multiplier TEMPO_MULTIPLIER
-        A multiplier applied to the extracted tempo. Speeds up or slows down the animation. (default: 1.0)
-
-    --output_directory OUTPUT_DIRECTORY
-        The directory to which the output will be saved. (default: .)
-
-    --bpm BPM
-        The BPM of the audio. Will be estimated if not passed. (default: None)
-
-    --interpolation INTERPOLATION
-        The method of interpolation to use. Options: [linear, cubic, quadratic] (default: linear)
+| Easing   | Per-frame durations (ms)                       |
+| -------- | ---------------------------------------------- |
+| `linear` | 62.5 each                                      |
+| `cubic`  | 3.9, 27.3, 74.2, 144.5, 144.5, 74.2, 27.3, 3.9 |
 
 ## How it works
 
-A GIF stores a duration per frame, so nothing has to be added or dropped to retime one; the frames just get held for
-different lengths.
+1. `ImageDecoder` decodes the GIF a frame at a time.
+2. Each pair of consecutive beat frames is stretched to span exactly one beat, however many frames
+   sit between them. The last wraps around to the first, so the animation closes its loop on a beat.
+3. The easing distributes that beat across those frames, and the per-frame durations are the
+   differences between successive points on the curve.
+4. The animation is played starting from the first beat frame rather than from frame 0, so that
+   frame lands on the song's downbeat and every later beat frame lands on a beat too.
+5. `VideoEncoder` and `AudioEncoder` encode the frames and the audio, and the page muxes them into
+   an mp4 itself. Frame timestamps are written to the microsecond, so the beats land exactly.
 
-1. TempoCNN estimates the tempo of the audio, which gives the length of one beat in milliseconds. `--bpm` skips the
-   estimation, and `--tempo_multiplier` scales it.
-2. Each pair of consecutive `--beat_frames` is stretched to span exactly one beat, however many frames sit between
-   them. The last label wraps around to the first, so the animation closes its loop on a beat.
-3. An easing function distributes that beat across those frames, and the per-frame durations are the differences
-   between successive points on the curve.
-4. The animation is played starting from the first `--beat_frames` label rather than from frame 0, so that label
-   lands on the audio's first beat and every later one lands on a beat too.
-5. ffmpeg concatenates the frames at their new durations, repeating the sequence enough times to cover the audio, and
-   muxes the audio in.
+Tempo estimation runs the [TempoCNN](https://essentia.upf.edu/models.html#tempocnn) model in
+`docs/tempocnn/` through TensorFlow.js. Its front end — 11025Hz mono, 1024-sample frames every 512,
+Hann, magnitude spectrum, 40 Slaney mel bands over 20-5000Hz with unit-triangle normalisation — was
+matched against essentia's `TensorflowInputTempoCNN` to a relative error of 1.5e-7, and gives the
+same answer essentia does on both demo tracks.
 
-`--interpolation` picks the easing, and it changes the character of the movement more than you would expect. `linear`
-gives every frame the same duration, so the animation moves at a constant speed and only its landmarks are on the beat.
-`cubic` and `quadratic` ease in and out, which holds the frames midway between beats and flashes through the ones on
-either side of the beat itself — the motion snaps on the beat and drifts between them. Spreading a 500ms beat over
-eight frames:
+## Development
 
-| Easing   | Per-frame durations (ms)                          |
-| -------- | ------------------------------------------------- |
-| `linear` | 62.5 each                                         |
-| `cubic`  | 3.9, 27.3, 74.2, 144.5, 144.5, 74.2, 27.3, 3.9    |
+    node docs/test_timing.mjs
 
-These are what the curve asks for; what ffmpeg delivers is rounded, see the limitations below.
+pulls the retiming out of the page and checks it against `docs/timing_cases.json`, which was
+generated by the Python CLI this tool replaced. The Pages workflow runs it before deploying, so the
+frame spacing cannot change without the test being updated deliberately.
 
 ## Limitations
 
-- **The audio has to start exactly on a beat.** There is no offset detection, so a track with a lead-in has to be
-  trimmed first.
-- **Beat frames are labelled by hand.** Which frame of an animation reads as its accent is a judgement about the
-  motion, and nothing here makes it for you.
-- **Frame durations are rounded onto a 40ms grid.** ffmpeg's concat demuxer gives a stream of images a 1/25 timebase,
-  so nothing finer than 40ms survives and each beat can land up to 20ms early or late. The error does not accumulate,
-  but the shape of an eased curve does get flattened — in the table above every one of `cubic`'s four shortest frames
-  rounds to the same length. The script warns when any duration falls below the grid; use fewer beat frames or a
-  different easing.
-- **Transparency is not preserved** when the frames are concatenated.
+- **Beat frames are marked by hand.** Which frame of an animation reads as its accent is a
+  judgement about the motion, and nothing here makes it for you. See
+  [#4](https://github.com/p3zo/gifsync/issues/4).
+- **Deriving tempo from beat marks assumes they are consecutive beats.** Mark every bar instead and
+  the tempo comes out too slow by that factor.
+- **A frame shorter than a display refresh will not read**, however exactly it is timed. The eased
+  curves reach that first, since their shortest frames sit right at the beat; the page warns when
+  any duration falls below it.
+- **Firefox has no AAC encoder**, so it produces an Opus track, which QuickTime and Safari will not
+  play. Chrome and Safari produce AAC. The page says which you are getting.
+- **Transparency is not preserved.**
+- **Estimating the tempo needs the page served**, not opened off the filesystem, and a network
+  connection the first time so TensorFlow.js can load. Everything else works offline from a file.

@@ -80,7 +80,6 @@ input[type=number] { width: 6rem; }
 #log:empty { display: none; }
 a#download { display: inline-block; margin-top: .75rem; color: var(--accent); font-weight: 600; }
 a#download[hidden] { display: none; }
-#mode { font-family: var(--mono); font-size: .75rem; color: var(--dim); }
 #unsupported { border-color: var(--accent); }
 </style>
 </head>
@@ -88,7 +87,6 @@ a#download[hidden] { display: none; }
 
 <header>
   <h1>gifsync beat marker</h1>
-  <span id="mode"></span>
 </header>
 
 <main>
@@ -171,9 +169,7 @@ a#download[hidden] { display: none; }
 <section id="secRender" data-off>
   <h2>Render</h2>
   <div class="row">
-    <button id="renderBrowserBtn" class="primary">Render here</button>
-    <button id="renderPythonBtn" hidden>Render with sync.py</button>
-    <span class="mono" id="renderNote"></span>
+    <button id="renderBrowserBtn" class="primary">Render</button>
   </div>
   <div class="row"><span class="mono warn" id="codecNote"></span></div>
   <pre id="log"></pre>
@@ -187,11 +183,11 @@ a#download[hidden] { display: none; }
 
 const $ = (id) => document.getElementById(id);
 
-/* --- timing:start --- shared with sync.py; docs/test_timing.mjs diffs the two --- */
+/* --- timing:start --- pinned by docs/test_timing.mjs against timing_cases.json --- */
 
-// ffmpeg's concat demuxer rounds durations onto a 40ms grid. WebCodecs takes exact
-// microsecond timestamps, so rendering here is not bound by it, but the CLI is.
-export const CONCAT_TIMEBASE_MS = 40;
+// Frame timestamps are written to the microsecond, so nothing here is rounded. What a
+// viewer cannot see is a frame held for less than one refresh of their display.
+export const MIN_VISIBLE_MS = 1000 / 60;
 
 const EASINGS = {
   linear: (t) => t,
@@ -859,13 +855,13 @@ function refresh() {
 
   $("timingSummary").innerHTML = problem ? `<span class="warn">${problem}</span>` : "";
   if (currentTiming) {
-    const short = currentTiming.durations.filter((d) => d < CONCAT_TIMEBASE_MS).length;
+    const short = currentTiming.durations.filter((d) => d < MIN_VISIBLE_MS).length;
     $("timingSummary").innerHTML =
       `beat <b>${currentTiming.msPerBeat.toFixed(1)}ms</b> · loop <b>${beats.length}</b> beats, ` +
       `<b>${(currentTiming.loopMs / 1000).toFixed(2)}s</b> · shortest frame ` +
       `<b>${Math.min(...currentTiming.durations).toFixed(1)}ms</b>` +
-      (short ? `<br><span class="warn">${short} frame${short > 1 ? "s" : ""} under ` +
-        `${CONCAT_TIMEBASE_MS}ms — exact here, rounded by the sync.py path.</span>` : "");
+      (short ? `<br><span class="warn">${short} frame${short > 1 ? "s" : ""} shorter than one ` +
+        `frame of a 60Hz display, so they will flash past rather than read.</span>` : "");
   }
 
   $("secSync").toggleAttribute("data-off", !ready.audio);
@@ -1376,92 +1372,13 @@ $("renderBrowserBtn").onclick = async () => {
   }
 };
 
-/* ------------------------------------------------------------ sync.py mode */
-
-async function toBase64(file) {
-  const buf = new Uint8Array(await file.arrayBuffer());
-  let binary = "";
-  for (let i = 0; i < buf.length; i += 0x8000) {
-    binary += String.fromCharCode(...buf.subarray(i, i + 0x8000));
-  }
-  return btoa(binary);
-}
-
-$("renderPythonBtn").onclick = async () => {
-  const button = $("renderPythonBtn");
-  const timing = computeTiming();
-  if (!timing) return;
-
-  button.disabled = true;
-  $("log").textContent = "";
-  $("download").hidden = true;
-
-  try {
-    log("Uploading…");
-    const response = await fetch("api/render", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        gif_name: state.gifFile.name, gif_b64: await toBase64(state.gifFile),
-        audio_name: state.audioFile.name, audio_b64: await toBase64(state.audioFile),
-        beat_frames: timing.beats,
-        bpm: parseFloat($("bpm").value),
-        tempo_multiplier: parseFloat($("hits").value),
-        interpolation: $("interpolation").value,
-        downbeat: downbeat(),
-      }),
-    });
-
-    if (!response.ok) throw new Error(`Server returned ${response.status}: ${await response.text()}`);
-
-    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-    let tail = "", result = null;
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      tail += value;
-      const lines = tail.split("\n");
-      tail = lines.pop();
-      for (const line of lines) {
-        if (line.startsWith("RESULT ")) result = line.slice(7).trim();
-        else if (line) log(line);
-      }
-    }
-
-    if (!result) throw new Error("The server finished without producing a file.");
-
-    const mp4 = await fetch(`api/result?name=${encodeURIComponent(result)}`);
-    if (!mp4.ok) throw new Error(`Could not fetch the result: ${mp4.status}`);
-    offerDownload(await mp4.blob(), result);
-    log("Done.");
-  } catch (err) {
-    fail(err);
-  } finally {
-    button.disabled = false;
-  }
-};
-
-(location.protocol === "file:"
-  ? Promise.resolve(null)
-  : fetch("api/health").then((r) => (r.ok ? r.json() : null)).catch(() => null)
-).then((health) => {
-    if (health?.ok) {
-      $("renderPythonBtn").hidden = false;
-      $("estimateBtn").hidden = !health.essentia;
-      $("mode").textContent = "served by marker.py — sync.py available";
-      $("renderNote").textContent = health.ffmpeg ? "" : "ffmpeg not found on PATH";
-    } else {
-      $("mode").textContent = "browser only — run marker.py to render with sync.py";
-    }
-});
-
 // Say up front if this browser will produce an Opus track, rather than after a render
 if ("AudioEncoder" in window) {
   pickAudioCodec().then((codec) => {
     if (codec === "opus") {
       $("codecNote").textContent =
         "No AAC encoder in this browser, so the audio will be Opus. The mp4 plays in " +
-        "Chrome, Firefox and VLC, but not QuickTime or Safari. Render with marker.py for AAC.";
+        "Chrome, Firefox and VLC, but not QuickTime or Safari. Chrome or Safari will give you AAC.";
     }
   }).catch((err) => { $("codecNote").textContent = err.message; });
 }
