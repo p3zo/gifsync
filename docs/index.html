@@ -145,7 +145,8 @@ a#download[hidden] { display: none; }
   <div class="row">
     <label>BPM <input type="number" id="bpm" step="0.1" min="1" value="120"></label>
     <button id="tapBtn">Tap</button>
-    <button id="estimateBtn" hidden>Estimate</button>
+    <button id="estimateBtn">Estimate</button>
+    <span class="mono" id="estimateNote"></span>
     <label>Animation hits
       <select id="hits">
         <option value="0.25">every 4 beats</option>
@@ -637,27 +638,158 @@ $("tapBtn").onclick = () => {
   $("tapBtn").textContent = taps.length > 1 ? `Tap (${taps.length})` : "Tap";
 };
 
+/* ------------------------------------------------------------ tempo estimate */
+
+// TempoCNN's front end, matched against essentia's TensorflowInputTempoCNN: 11025Hz mono,
+// 1024-sample frames every 512, Hann, magnitude spectrum, 40 Slaney mel bands over
+// 20-5000Hz with unit-triangle normalisation. Reproduces essentia's mel matrix to 1.5e-7.
+const TEMPO_SR = 11025, TEMPO_FRAME = 1024, TEMPO_HOP = 512, TEMPO_BANDS = 40, TEMPO_PATCH = 256;
+
+const MEL_F_SP = 200 / 3, MEL_LOG_HZ = 1000;
+const MEL_LOG_STEP = Math.log(6.4) / 27, MEL_LOG_MEL = MEL_LOG_HZ / MEL_F_SP;
+const hzToMel = (f) => (f < MEL_LOG_HZ ? f / MEL_F_SP : MEL_LOG_MEL + Math.log(f / MEL_LOG_HZ) / MEL_LOG_STEP);
+const melToHz = (m) => (m < MEL_LOG_MEL ? m * MEL_F_SP : MEL_LOG_HZ * Math.exp(MEL_LOG_STEP * (m - MEL_LOG_MEL)));
+
+function melFilterbank(lo = 20, hi = 5000) {
+  const bins = TEMPO_FRAME / 2 + 1;
+  const loMel = hzToMel(lo), hiMel = hzToMel(hi);
+  const edges = Array.from({ length: TEMPO_BANDS + 2 }, (_, i) =>
+    melToHz(loMel + ((hiMel - loMel) * i) / (TEMPO_BANDS + 1)));
+
+  return Array.from({ length: TEMPO_BANDS }, (_, b) => {
+    const [l, c, r] = [edges[b], edges[b + 1], edges[b + 2]];
+    const weights = [];
+    let start = -1;
+    for (let k = 0; k < bins; k++) {
+      const f = (k * TEMPO_SR) / TEMPO_FRAME;
+      // triangle, scaled so its area is one
+      const v = Math.max(0, Math.min((f - l) / (c - l), (r - f) / (r - c))) * (2 / (r - l));
+      if (v > 0) { if (start < 0) start = k; weights.push(v); }
+      else if (start >= 0) break;
+    }
+    return { start, weights: Float64Array.from(weights) };
+  });
+}
+
+function fft(re, im) {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = (-2 * Math.PI) / len;
+    for (let i = 0; i < n; i += len) {
+      for (let k = 0; k < len / 2; k++) {
+        const wr = Math.cos(ang * k), wi = Math.sin(ang * k);
+        const ur = re[i + k], ui = im[i + k];
+        const vr = re[i + k + len / 2] * wr - im[i + k + len / 2] * wi;
+        const vi = re[i + k + len / 2] * wi + im[i + k + len / 2] * wr;
+        re[i + k] = ur + vr; im[i + k] = ui + vi;
+        re[i + k + len / 2] = ur - vr; im[i + k + len / 2] = ui - vi;
+      }
+    }
+  }
+}
+
+function melSpectrogram(samples) {
+  const fb = melFilterbank();
+  const bins = TEMPO_FRAME / 2 + 1;
+  // denominator is size-1, which is the Hann essentia uses
+  const window = Float64Array.from({ length: TEMPO_FRAME }, (_, i) =>
+    0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (TEMPO_FRAME - 1)));
+
+  const rows = [];
+  for (let at = 0; at + TEMPO_FRAME <= samples.length; at += TEMPO_HOP) {
+    const re = new Float64Array(TEMPO_FRAME), im = new Float64Array(TEMPO_FRAME);
+    for (let i = 0; i < TEMPO_FRAME; i++) re[i] = samples[at + i] * window[i];
+    fft(re, im);
+
+    const row = new Float64Array(TEMPO_BANDS);
+    for (let b = 0; b < TEMPO_BANDS; b++) {
+      const { start, weights } = fb[b];
+      let acc = 0;
+      for (let i = 0; i < weights.length; i++) acc += Math.hypot(re[start + i], im[start + i]) * weights[i];
+      row[b] = acc;
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+let tempoModel = null;
+
+async function loadTempoModel() {
+  if (tempoModel) return tempoModel;
+  const tf = await import("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/+esm");
+  await tf.ready();
+  return (tempoModel = { tf, model: await tf.loadGraphModel("tempocnn/model.json") });
+}
+
+async function estimateBpm(buffer) {
+  const { tf, model } = await loadTempoModel();
+
+  const offline = new OfflineAudioContext(1, Math.ceil(buffer.duration * TEMPO_SR), TEMPO_SR);
+  const source = offline.createBufferSource();
+  source.buffer = buffer;
+  source.connect(offline.destination);
+  source.start();
+  const mel = melSpectrogram((await offline.startRendering()).getChannelData(0));
+
+  if (mel.length < TEMPO_PATCH) {
+    throw new Error(`Need about ${Math.ceil((TEMPO_PATCH * TEMPO_HOP) / TEMPO_SR)}s of audio to estimate the tempo.`);
+  }
+
+  // The model reads one 256-frame patch at a time; average the votes across the track
+  const votes = new Float64Array(256);
+  let patches = 0;
+  for (let at = 0; at + TEMPO_PATCH <= mel.length; at += TEMPO_PATCH / 2) {
+    const patch = new Float32Array(TEMPO_BANDS * TEMPO_PATCH);
+    for (let t = 0; t < TEMPO_PATCH; t++) {
+      for (let m = 0; m < TEMPO_BANDS; m++) patch[m * TEMPO_PATCH + t] = mel[at + t][m];
+    }
+
+    let mean = 0;
+    for (const v of patch) mean += v;
+    mean /= patch.length;
+    let sd = 0;
+    for (const v of patch) sd += (v - mean) ** 2;
+    sd = Math.max(Math.sqrt(sd / patch.length), 1e-4);
+    for (let i = 0; i < patch.length; i++) patch[i] = (patch[i] - mean) / sd;
+
+    const input = tf.tensor(patch, [1, TEMPO_BANDS, TEMPO_PATCH, 1]);
+    const output = model.execute(input);
+    const probabilities = await output.data();
+    for (let i = 0; i < 256; i++) votes[i] += probabilities[i];
+    input.dispose();
+    output.dispose();
+    patches++;
+  }
+
+  let best = 0;
+  for (let i = 1; i < 256; i++) if (votes[i] > votes[best]) best = i;
+  // the softmax runs from 30 BPM up
+  return { bpm: best + 30, confidence: votes[best] / patches, patches };
+}
+
 $("estimateBtn").onclick = async () => {
   const button = $("estimateBtn");
-  if (!state.audioFile) return;
+  if (!state.audioBuffer) return;
 
   button.disabled = true;
   button.textContent = "Estimating…";
   try {
-    const response = await fetch("api/bpm", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        audio_name: state.audioFile.name,
-        audio_b64: await toBase64(state.audioFile),
-      }),
-    });
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.error || `Server returned ${response.status}`);
-    $("bpm").value = body.bpm.toFixed(1);
+    const { bpm, confidence, patches } = await estimateBpm(state.audioBuffer);
+    $("bpm").value = bpm.toFixed(1);
+    $("estimateNote").textContent =
+      `${bpm} BPM from ${patches} window${patches > 1 ? "s" : ""}, confidence ${confidence.toFixed(2)}`;
     refresh();
   } catch (err) {
-    fail(err);
+    $("estimateNote").textContent = err.message.includes("Failed to fetch")
+      ? "Could not load the tempo model. It needs the page to be served, and a network connection the first time."
+      : err.message;
   } finally {
     button.disabled = false;
     button.textContent = "Estimate";
