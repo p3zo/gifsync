@@ -61,8 +61,10 @@ different lengths.
    them. The last label wraps around to the first, so the animation closes its loop on a beat.
 3. An easing function distributes that beat across those frames, and the per-frame durations are the differences
    between successive points on the curve.
-4. The duration sequence is rotated so it lines up with frame 0 of the input, then ffmpeg concatenates the frames at
-   their new durations and muxes in the audio.
+4. The animation is played starting from the first `--beat_frames` label rather than from frame 0, so that label
+   lands on the audio's first beat and every later one lands on a beat too.
+5. ffmpeg concatenates the frames at their new durations, repeating the sequence enough times to cover the audio, and
+   muxes the audio in.
 
 `--interpolation` picks the easing, and it changes the character of the movement more than you would expect. `linear`
 gives every frame the same duration, so the animation moves at a constant speed and only its landmarks are on the beat.
@@ -75,14 +77,17 @@ eight frames:
 | `linear` | 62.5 each                                         |
 | `cubic`  | 3.9, 27.3, 74.2, 144.5, 144.5, 74.2, 27.3, 3.9    |
 
+These are what the curve asks for; what ffmpeg delivers is rounded, see the limitations below.
+
 ## Limitations
 
 - **The audio has to start exactly on a beat.** There is no offset detection, so a track with a lead-in has to be
   trimmed first.
 - **Beat frames are labelled by hand.** Which frame of an animation reads as its accent is a judgement about the
   motion, and nothing here makes it for you.
-- **Too many beat frames and the durations get too short.** Below about 2ms per frame ffmpeg stops handling them
-  properly; the script warns rather than producing a broken result. The eased curves reach that floor first, since
-  their shortest frames sit right at the beat — in the table above `cubic` is already down to 3.9ms. Use fewer beat
-  frames or a different easing.
+- **Frame durations are rounded onto a 40ms grid.** ffmpeg's concat demuxer gives a stream of images a 1/25 timebase,
+  so nothing finer than 40ms survives and each beat can land up to 20ms early or late. The error does not accumulate,
+  but the shape of an eased curve does get flattened — in the table above every one of `cubic`'s four shortest frames
+  rounds to the same length. The script warns when any duration falls below the grid; use fewer beat frames or a
+  different easing.
 - **Transparency is not preserved** when the frames are concatenated.
