@@ -124,6 +124,12 @@ a.button {
 }
 #resultVideo { display: block; max-width: 100%; max-height: 340px; border-radius: 6px; margin-bottom: .75rem; }
 #result[hidden] { display: none; }
+.banner {
+  display: flex; align-items: baseline; gap: .75rem; font-size: .9rem;
+  border: 1px solid var(--accent); border-radius: 10px; padding: .75rem 1rem; background: var(--panel);
+}
+.banner[hidden] { display: none; }
+.banner button { margin-left: auto; }
 .note { margin-top: .75rem; }
 .note:empty { display: none; }
 details.more > summary { cursor: pointer; width: fit-content; font-size: .8rem; color: var(--dim); }
@@ -142,6 +148,11 @@ details.more .row { margin-top: .6rem; }
 </header>
 
 <main>
+
+<div class="banner" id="error" role="alert" hidden>
+  <span id="errorText"></span>
+  <button id="errorClose">Dismiss</button>
+</div>
 
 <section id="unsupported" hidden>
   <h2>Unsupported browser</h2>
@@ -350,15 +361,22 @@ if (MISSING.length) {
 /* ------------------------------------------------------------------------ gif */
 
 function wireDrop(dropId, inputId, onFile) {
-  const drop = $(dropId), input = $(inputId);
+  const drop = $(dropId), input = $(inputId), idle = drop.textContent;
+
+  // A file that will not load leaves the zone reading "Decoding…" for ever otherwise
+  const handle = (file) => {
+    clearError();
+    onFile(file).catch((err) => { drop.textContent = idle; fail(err); });
+  };
+
   drop.onclick = () => input.click();
-  input.onchange = () => input.files[0] && onFile(input.files[0]);
+  input.onchange = () => input.files[0] && handle(input.files[0]);
   drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
   drop.ondragleave = () => drop.classList.remove("over");
   drop.ondrop = (e) => {
     e.preventDefault();
     drop.classList.remove("over");
-    if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files[0]) handle(e.dataTransfer.files[0]);
   };
 }
 
@@ -370,9 +388,15 @@ async function loadGif(file) {
   $("gifDrop").textContent = `Decoding ${file.name}…`;
 
   const decoder = new ImageDecoder({ data: await file.arrayBuffer(), type: "image/gif" });
-  await decoder.tracks.ready;
-  // frameCount only settles once the whole gif has been parsed
-  await decoder.completed;
+  try {
+    await decoder.tracks.ready;
+    // frameCount only settles once the whole gif has been parsed
+    await decoder.completed;
+  } catch (err) {
+    // the decoder's own wording ("Failed to retrieve track metadata") says nothing to
+    // someone who has simply picked the wrong file, so name the file and keep the reason
+    throw new Error(`${file.name} could not be read as a GIF. ${err.message}`);
+  }
 
   const count = decoder.tracks.selectedTrack.frameCount;
   const frames = [];
@@ -476,7 +500,7 @@ function toggleMark() {
   refresh();
 }
 
-wireDrop("gifDrop", "gifInput", (f) => loadGif(f).catch(fail));
+wireDrop("gifDrop", "gifInput", loadGif);
 $("prevBtn").onclick = () => step(-1);
 $("nextBtn").onclick = () => step(1);
 $("markBtn").onclick = toggleMark;
@@ -504,7 +528,11 @@ async function loadAudio(file) {
   $("audioDrop").textContent = `Decoding ${file.name}…`;
 
   const bytes = await file.arrayBuffer();
-  state.audioBuffer = await actx.decodeAudioData(bytes.slice(0));
+  try {
+    state.audioBuffer = await actx.decodeAudioData(bytes.slice(0));
+  } catch (err) {
+    throw new Error(`${file.name} could not be read as audio. ${err.message}`);
+  }
   state.audioFile = file;
   state.audioBeats = [];
   state.peaks = null;
@@ -658,7 +686,7 @@ function setTempoFromBeats() {
 
 $("clearBeatsBtn").onclick = () => { state.audioBeats = []; refresh(); };
 
-wireDrop("audioDrop", "audioInput", (f) => loadAudio(f).catch(fail));
+wireDrop("audioDrop", "audioInput", loadAudio);
 
 /* ------------------------------------------------------------------ playback */
 
@@ -1146,8 +1174,16 @@ function status(line) {
 function fail(err) {
   console.error(err);
   log(`ERROR ${err.message}`);
-  alert(err.message);
+  $("errorText").textContent = err.message;
+  $("error").hidden = false;
+  $("error").scrollIntoView({ block: "nearest" });
 }
+
+function clearError() {
+  $("error").hidden = true;
+}
+
+$("errorClose").onclick = clearError;
 
 /* --------------------------------------------------------------------- mp4 */
 // A small MP4 writer. The point of writing one rather than pulling a library in is that
@@ -1618,6 +1654,7 @@ $("renderBrowserBtn").onclick = async () => {
   if (!timing) return;
 
   button.disabled = true;
+  clearError();
   clearRender();
 
   try {
