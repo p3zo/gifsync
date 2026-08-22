@@ -92,7 +92,8 @@ input[type=number] { width: 6rem; }
 #strip canvas.cur.beat { outline: 2px solid var(--ink); outline-offset: 1px; }
 #wave { display: block; width: 100%; height: 110px; cursor: crosshair; border-radius: 6px; background: var(--bg); }
 .mono { font-family: var(--mono); font-size: .8rem; color: var(--dim); }
-.mono b { color: var(--ink); font-weight: 600; }
+.say { font-size: .875rem; color: var(--dim); }
+.mono b, .say b { color: var(--ink); font-weight: 600; }
 .warn { color: var(--accent); }
 #log {
   font-family: var(--mono); font-size: .75rem; white-space: pre-wrap; word-break: break-word;
@@ -132,12 +133,12 @@ a#download[hidden] { display: none; }
     <div class="row">
       <button id="prevBtn">&#9664;</button>
       <button id="nextBtn">&#9654;</button>
-      <button id="markBtn" class="primary">Mark beat (space)</button>
-      <button id="clearBtn">Clear marks</button>
-      <span class="mono" id="framePos"></span>
+      <button id="markBtn" class="primary">Mark this frame (space)</button>
+      <button id="clearBtn">Clear all marks</button>
+      <span class="say" id="framePos"></span>
     </div>
     <div id="strip"></div>
-    <div class="mono" id="beatList"></div>
+    <div class="say" id="beatList"></div>
   </div>
   </div>
 </section>
@@ -152,8 +153,8 @@ a#download[hidden] { display: none; }
     <canvas id="wave"></canvas>
     <div class="row">
       <button id="tapBeatBtn">Tap a beat (B)</button>
-      <button id="clearBeatsBtn">Clear beat marks</button>
-      <span class="mono" id="audioSummary"></span>
+      <button id="clearBeatsBtn">Clear all beats</button>
+      <span class="say" id="audioSummary"></span>
     </div>
     <div class="row"><span class="mono">
       <span class="key k-mark"></span> beats you marked in the song
@@ -172,13 +173,13 @@ a#download[hidden] { display: none; }
   <div class="empty" id="previewEmpty">Your GIF plays here, in time with the song.</div>
   <div class="row">
     <button id="previewBtn" class="primary">Play preview</button>
-    <span class="mono" id="previewPos"></span>
+    <span class="say" id="previewPos"></span>
   </div>
   <div class="row">
     <label>BPM <input type="number" id="bpm" step="0.1" min="1" value="120"></label>
     <button id="tapBtn">Tap</button>
     <button id="estimateBtn">Estimate</button>
-    <span class="mono" id="estimateNote"></span>
+    <span class="say" id="estimateNote"></span>
     <label>Animation hits
       <select id="hits">
         <option value="0.25">every 4 beats</option>
@@ -197,7 +198,7 @@ a#download[hidden] { display: none; }
     </label>
     <label><input type="checkbox" id="clickTrack"> Click track</label>
   </div>
-  <div class="row"><span class="mono" id="timingSummary"></span></div>
+  <div class="row"><span class="say" id="timingSummary"></span></div>
   </div>
 </section>
 
@@ -424,8 +425,9 @@ async function loadAudio(file) {
   state.audioBeats = [];
   state.peaks = null;
 
+  const total = Math.round(state.audioBuffer.duration);
   $("audioDrop").textContent =
-    `${file.name} — ${state.audioBuffer.duration.toFixed(2)}s. Drop another to replace.`;
+    `${file.name} — ${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")} long. Drop another to replace.`;
   $("audioBody").hidden = false;
 
   // Fetching the tempo model is most of the wait on a first estimate, so start it now
@@ -601,8 +603,8 @@ function tickPlayback() {
       const ctx = $("previewCanvas").getContext("2d");
       ctx.clearRect(0, 0, state.width, state.height);
       ctx.drawImage(state.frames[frame], 0, 0);
-      $("previewPos").textContent =
-        `${(ms / 1000).toFixed(2)}s · beat ${Math.floor(ms / currentTiming.msPerBeat) + 1} · frame ${frame}`;
+      $("previewPos").innerHTML =
+        `Beat <b>${Math.floor(ms / currentTiming.msPerBeat) + 1}</b>, ${(ms / 1000).toFixed(1)}s in`;
     }
     pumpClicks();
   }
@@ -845,7 +847,7 @@ async function estimateBpm(buffer, onProgress = () => {}) {
   const SLICE = 128;
   for (let f = 0; f < total; f += SLICE) {
     mel.push(...melSpectrogram(mono, f, SLICE));
-    onProgress(`analysing ${Math.round((100 * mel.length) / total)}%`);
+    onProgress(`Listening to the song… ${Math.round((100 * mel.length) / total)}%`);
     await new Promise((r) => setTimeout(r, 0));
   }
 
@@ -873,14 +875,14 @@ async function estimateBpm(buffer, onProgress = () => {}) {
     input.dispose();
     output.dispose();
     patches++;
-    onProgress(`matching tempo, window ${patches}`);
+    onProgress("Working out the tempo…");
     await new Promise((r) => setTimeout(r, 0));
   }
 
   let best = 0;
   for (let i = 1; i < 256; i++) if (votes[i] > votes[best]) best = i;
   // the softmax runs from 30 BPM up
-  return { bpm: best + 30, confidence: votes[best] / patches, patches };
+  return { bpm: best + 30, confidence: votes[best] / patches };
 }
 
 $("estimateBtn").onclick = async () => {
@@ -890,11 +892,12 @@ $("estimateBtn").onclick = async () => {
   button.disabled = true;
   button.textContent = "Estimating…";
   try {
-    const { bpm, confidence, patches } = await estimateBpm(
+    const { bpm, confidence } = await estimateBpm(
       state.audioBuffer, (note) => { $("estimateNote").textContent = note; });
     $("bpm").value = bpm.toFixed(1);
-    $("estimateNote").textContent =
-      `${bpm} BPM from ${patches} window${patches > 1 ? "s" : ""}, confidence ${confidence.toFixed(2)}`;
+    $("estimateNote").innerHTML = `Sounds like <b>${bpm} BPM</b>.` +
+      // the model always names a tempo; when the vote is this split it is often the wrong one
+      (confidence < 0.5 ? ` <span class="warn">It is not sure though, so play it back and check.</span>` : "");
     refresh();
   } catch (err) {
     $("estimateNote").textContent = err.message.includes("Failed to fetch")
@@ -942,8 +945,8 @@ function computeTiming() {
 function refresh() {
   const ready = { gif: state.frames.length > 0, audio: !!state.audioBuffer };
 
-  $("framePos").textContent = ready.gif ? `frame ${state.cur} of ${state.frames.length - 1}` : "";
-  $("markBtn").textContent = state.beats.has(state.cur) ? "Unmark beat (space)" : "Mark beat (space)";
+  $("framePos").innerHTML = ready.gif ? `Frame <b>${state.cur + 1}</b> of ${state.frames.length}` : "";
+  $("markBtn").textContent = state.beats.has(state.cur) ? "Unmark this frame (space)" : "Mark this frame (space)";
 
   [...$("strip").children].forEach((c, i) => {
     c.classList.toggle("cur", i === state.cur);
@@ -952,8 +955,8 @@ function refresh() {
 
   const beats = [...state.beats].sort((a, b) => a - b);
   $("beatList").innerHTML = beats.length
-    ? `beat frames <b>${beats.join(" ")}</b>`
-    : "no beat frames marked";
+    ? `<b>${beats.length}</b> frame${beats.length > 1 ? "s" : ""} marked: the beat lands on each of them in turn.`
+    : "No frames marked yet. Step through the GIF and mark the ones the beat should land on.";
 
   currentTiming = null;
   let problem = "";
@@ -962,8 +965,8 @@ function refresh() {
   if (ready.audio) {
     const marks = state.audioBeats.length;
     $("audioSummary").innerHTML = marks
-      ? `<b>${marks}</b> beat mark${marks > 1 ? "s" : ""} · downbeat <b>${downbeat().toFixed(3)}s</b>`
-      : "click the waveform to mark the beats of the song";
+      ? `<b>${marks}</b> beat${marks > 1 ? "s" : ""} marked. The video starts at <b>${downbeat().toFixed(2)}s</b>, on the first of them.`
+      : "Click the waveform where you hear a beat, or press B along to the music.";
     drawWave(playback ? playback.from + Math.max(0, actx.currentTime - playback.t0) : null);
   }
 
@@ -971,11 +974,10 @@ function refresh() {
   if (currentTiming) {
     const short = currentTiming.durations.filter((d) => d < MIN_VISIBLE_MS).length;
     $("timingSummary").innerHTML =
-      `beat <b>${currentTiming.msPerBeat.toFixed(1)}ms</b> · loop <b>${beats.length}</b> beats, ` +
-      `<b>${(currentTiming.loopMs / 1000).toFixed(2)}s</b> · shortest frame ` +
-      `<b>${Math.min(...currentTiming.durations).toFixed(1)}ms</b>` +
-      (short ? `<br><span class="warn">${short} frame${short > 1 ? "s" : ""} shorter than one ` +
-        `frame of a 60Hz display, so they will flash past rather than read.</span>` : "");
+      `Your GIF loops every <b>${(currentTiming.loopMs / 1000).toFixed(2)}s</b>, ` +
+      `covering <b>${beats.length}</b> beat${beats.length > 1 ? "s" : ""} of the song.` +
+      (short ? `<br><span class="warn">${short} frame${short > 1 ? "s are" : " is"} too quick to see at ` +
+        `this tempo, and will flash past rather than read.</span>` : "");
   }
 
   $("previewCanvas").hidden = !ready.gif;
