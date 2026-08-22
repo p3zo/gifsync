@@ -48,8 +48,9 @@ h1 { font-size: 1.3rem; margin: 0 0 .4rem; letter-spacing: -.01em; }
 #intro { margin: 0; max-width: 46rem; color: var(--dim); font-size: .925rem; }
 footer {
   max-width: 78rem; margin: 2rem auto 0; padding-top: .9rem; border-top: 1px solid var(--line);
-  display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; font-size: .8rem; color: var(--dim);
+  display: grid; justify-items: start; gap: .5rem; font-size: .8rem; color: var(--dim);
 }
+footer .links { display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; }
 footer a { color: var(--ink); }
 footer span a { color: inherit; }
 header .row { margin-top: .9rem; }
@@ -69,7 +70,7 @@ main { max-width: 78rem; margin: 0 auto; display: grid; gap: 1rem; grid-template
 }
 
 .stagerow { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; margin-bottom: .75rem; }
-.stagerow > :first-child { flex: none; }
+.stagerow > :first-child { flex: 0 1 auto; min-width: 0; max-width: 100%; }
 .stagecontrols { flex: 1; min-width: 13rem; display: grid; gap: .6rem; align-content: start; }
 .stagecontrols .row + .row { margin-top: 0; }
 section {
@@ -123,10 +124,22 @@ input[type=color] { width: 2.4rem; height: 1.7rem; padding: 1px; border: 1px sol
   color: var(--dim); cursor: pointer; font-size: .9rem;
 }
 .drop.over { border-color: var(--accent); color: var(--ink); }
-#frameCanvas, #previewCanvas {
+#frameCanvas {
   display: block; max-width: 100%; max-height: 220px; width: auto; image-rendering: pixelated;
-  background: repeating-conic-gradient(var(--line) 0 25%, transparent 0 50%) 0 0/16px 16px;
-  border-radius: 6px; margin-bottom: .75rem;
+  background: #000; border-radius: 6px; margin-bottom: .75rem;
+}
+/* A fixed height rather than the gif's own: at intrinsic size a 96px gif renders as a
+   thumbnail beside a full-width waveform, and the panel changes shape with every file. */
+#previewCanvas {
+  display: block; height: 15rem; width: auto; max-width: 100%; object-fit: contain;
+  image-rendering: pixelated; background: #000; border-radius: 6px; margin-bottom: .75rem;
+}
+/* Stacked into one column there is no second column to leave room for, so the picture
+   takes the width it is given and keeps its shape rather than sitting in letterbox bars. */
+@media (max-width: 40rem) {
+  /* the wrapper is content-sized by default, which would make 100% mean "the gif's own width" */
+  .stagerow > :first-child { width: 100%; }
+  #previewCanvas { width: 100%; height: auto; max-height: 60vh; }
 }
 #frameCanvas[hidden], #previewCanvas[hidden] { display: none; }
 #strip { display: flex; gap: 3px; overflow-x: auto; padding: .5rem 0; margin-top: .75rem; }
@@ -137,14 +150,16 @@ input[type=color] { width: 2.4rem; height: 1.7rem; padding: 1px; border: 1px sol
 #strip canvas.cur { border-color: var(--ink); }
 #strip canvas.beat { border-color: var(--accent); }
 #strip canvas.cur.beat { outline: 2px solid var(--ink); outline-offset: 1px; }
+/* Wrapped, not scrolled: the whole point of the strip is seeing every mark at once, and a
+   scroll box in a narrow column hides most of them behind no affordance at all. */
 #beatStrip {
-  display: flex; gap: .5rem; overflow-x: auto; padding: .6rem 0 .5rem;
+  display: flex; flex-wrap: wrap; gap: .5rem; padding: .6rem 0 .5rem;
   border-top: 1px solid var(--line); /* two thumbnail rows in a row need telling apart */
 }
 #beatStrip:empty { display: none; }
 #beatStrip figure { margin: 0; flex: none; text-align: center; cursor: pointer; }
 #beatStrip canvas {
-  height: 54px; display: block; border-radius: 3px; background: var(--bg);
+  height: 44px; display: block; border-radius: 3px; background: var(--bg);
   border: 2px solid var(--accent);
 }
 #beatStrip figure.cur canvas { outline: 2px solid var(--ink); outline-offset: 1px; }
@@ -191,11 +206,15 @@ input[type=color] { width: 2.4rem; height: 1.7rem; padding: 1px; border: 1px sol
 }
 #pickerGrid img {
   display: block; width: 100%; height: 8rem; object-fit: contain; border-radius: 5px;
-  background: repeating-conic-gradient(var(--line) 0 25%, transparent 0 50%) 0 0/12px 12px;
+  /* black, not a transparency check, because black is what a transparent pixel becomes */
+  background: #000;
 }
 .pickname { display: block; font-size: .78rem; margin-top: .3rem;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pickmeta { display: block; font-size: .7rem; color: var(--dim); }
+.pickmeta {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  font-size: .7rem; color: var(--dim);
+}
 .pickmissing {
   display: grid; place-items: center; height: 8rem; border-radius: 5px;
   background: var(--panel); color: var(--dim); font-size: .75rem;
@@ -219,6 +238,10 @@ details.more > summary { cursor: pointer; width: fit-content; font-size: .8rem; 
 details.more > summary:hover { color: var(--ink); }
 details.more .row { margin-top: .6rem; }
 #unsupported { border-color: var(--accent); }
+/* Only worth offering while there is nothing to line up, and that is exactly when this
+   half of the page is empty and a first-time visitor is looking straight at it. */
+#exampleRow { display: none; }
+.is-locked #exampleRow { display: flex; }
 </style>
 </head>
 <body>
@@ -227,10 +250,6 @@ details.more .row { margin-top: .6rem; }
   <h1>Gifsync - Sync GIFs to music</h1>
   <p id="intro">Drop in a GIF and a song. Gifsync picks out the beats in both and lines them up
   for you. Play it back, change anything that looks or sounds off, then save the video.</p>
-  <div class="row">
-    <button id="exampleBtn">Try an example</button>
-    <span class="say" id="exampleNote"></span>
-  </div>
 </header>
 
 <main>
@@ -307,6 +326,10 @@ details.more .row { margin-top: .6rem; }
 <section id="secSync" class="step">
   <h2><span class="num">3</span> Line them up</h2>
   <p class="why" id="secSyncWhy"></p>
+  <div class="row" id="exampleRow">
+    <button id="exampleBtn">Try an example</button>
+    <span class="say" id="exampleNote"></span>
+  </div>
   <div class="body">
   <div class="stagerow">
     <div>
@@ -393,8 +416,10 @@ details.more .row { margin-top: .6rem; }
   <span>Your GIF and song never leave your browser. Page views are counted with <a
     href="https://policies.google.com/technologies/partner-sites" target="_blank"
     rel="noopener">Google Analytics</a>, which sets cookies.</span>
-  <a href="https://github.com/p3zo/gifsync" target="_blank" rel="noopener">Source on GitHub</a>
-  <a href="https://ko-fi.com/patricio_" target="_blank" rel="noopener">Support the developer</a>
+  <div class="links">
+    <a href="https://github.com/p3zo/gifsync" target="_blank" rel="noopener">View source on GitHub</a>
+    <a href="https://ko-fi.com/patricio_" target="_blank" rel="noopener">Support the developer</a>
+  </div>
 </footer>
 
 <dialog id="picker">
@@ -1016,6 +1041,7 @@ async function loadExample() {
   state.beats = new Set(EXAMPLE.gifBeats);
   $("suggestCount").value = EXAMPLE.gifBeats.length;
   state.audioBeats = [...EXAMPLE.songBeats];
+  beatsAreEstimates = false;
   $("bpm").value = EXAMPLE.bpm;
   refresh();
 }
@@ -1061,6 +1087,7 @@ async function loadAudio(file) {
   }
   state.audioFile = file;
   state.audioBeats = [];
+  beatsAreEstimates = false;
   state.peaks = null;
   beatHistory.length = 0;
   songToken++;
@@ -1078,9 +1105,16 @@ async function loadAudio(file) {
   if (SERVED) estimateSong({ keepExistingBeats: true });
 }
 
+// Whether the marks on the waveform were placed by the estimate or by a person. Four marks
+// bunched at the head of a long song look like something went wrong; they are the estimate
+// showing its working, and the summary has to say so.
+let beatsAreEstimates = false;
+
 // The tempo is read off the beats, so putting a beat back has to put the tempo back with it
 function rememberBeats() {
-  remember(beatHistory, { beats: state.audioBeats.slice(), bpm: $("bpm").value });
+  remember(beatHistory, {
+    beats: state.audioBeats.slice(), bpm: $("bpm").value, estimates: beatsAreEstimates,
+  });
 }
 
 // The first beat mark is the downbeat: the moment the animation starts from
@@ -1190,6 +1224,7 @@ $("wave").onclick = (e) => {
   const near = state.audioBeats.findIndex((b) => Math.abs(b - t) < tolerance);
   if (near >= 0) {
     rememberBeats();
+    beatsAreEstimates = false;
     state.audioBeats.splice(near, 1);
     setTempoFromBeats();
     refresh();
@@ -1200,6 +1235,7 @@ $("wave").onclick = (e) => {
 
 function addAudioBeat(seconds) {
   rememberBeats();
+  beatsAreEstimates = false;
   state.audioBeats.push(seconds);
   state.audioBeats.sort((a, b) => a - b);
   setTempoFromBeats();
@@ -1216,6 +1252,7 @@ function setTempoFromBeats() {
 
 $("clearBeatsBtn").onclick = () => {
   rememberBeats();
+  beatsAreEstimates = false;
   state.audioBeats = [];
   refresh();
 };
@@ -1224,6 +1261,7 @@ $("undoBeatBtn").onclick = () => {
   if (!beatHistory.length) return;
   const previous = beatHistory.pop();
   state.audioBeats = previous.beats;
+  beatsAreEstimates = previous.estimates;
   $("bpm").value = previous.bpm;
   refresh();
 };
@@ -1688,6 +1726,7 @@ async function estimateSong({ keepExistingBeats }) {
       state.audioBeats = [0, 1, 2, 3]
         .map((k) => first + k * period)
         .filter((t) => t < state.audioBuffer.duration);
+      beatsAreEstimates = true;
     }
 
     $("estimateNote").innerHTML = `Sounds like <b>${bpm} BPM</b>.` +
@@ -1786,9 +1825,12 @@ function refresh() {
 
   if (ready.audio) {
     const marks = state.audioBeats.length;
-    $("audioSummary").innerHTML = marks
-      ? `<b>${marks}</b> beat${marks > 1 ? "s" : ""} marked. The video starts at <b>${downbeat().toFixed(2)}s</b>, on the first of them.`
-      : "Click the waveform where you hear a beat, or press B along to the music.";
+    const from = `The video starts at <b>${downbeat().toFixed(2)}s</b>, on the first of them.`;
+    $("audioSummary").innerHTML = !marks
+      ? "Click the waveform where you hear a beat, or press B along to the music."
+      : beatsAreEstimates
+        ? `The estimate marked the song's first <b>${marks}</b> beats to show the pace it heard. ${from}`
+        : `<b>${marks}</b> beat${marks > 1 ? "s" : ""} marked. ${from}`;
     drawWave(playback ? playback.from + Math.max(0, actx.currentTime - playback.t0) : null);
   }
 
