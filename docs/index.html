@@ -137,6 +137,46 @@ input[type=color] { width: 2.4rem; height: 1.7rem; padding: 1px; border: 1px sol
 }
 #log:empty::before { content: "Nothing yet."; color: var(--dim); }
 .make { justify-content: flex-end; }
+.hits { margin-top: .9rem; }
+/* the legend is already a dense line of small text; the fold needs air under it */
+details.spaced { margin-top: 1.1rem; }
+
+#gifCredit { margin-top: .6rem; }
+#gifCredit:empty { display: none; }
+#gifCredit a { color: inherit; }
+
+#picker {
+  width: min(60rem, 92vw); max-height: 86vh; padding: 1rem; border: 1px solid var(--line);
+  border-radius: 12px; background: var(--panel); color: var(--ink);
+}
+#picker::backdrop { background: rgb(0 0 0 / .5); }
+.pickerhead { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: .6rem; }
+.pickerhead strong { font-size: .95rem; }
+#pickerQuery {
+  flex: 1; min-width: 12rem; font: inherit; font-size: .875rem; padding: .35rem .5rem;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink);
+}
+#pickerChips { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .6rem; }
+#pickerChips button { font-size: .8rem; padding: .2rem .65rem; border-radius: 999px; color: var(--dim); }
+#pickerGrid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: .6rem;
+  max-height: 62vh; overflow-y: auto; padding-top: .3rem;
+}
+#pickerGrid button {
+  display: block; width: 100%; padding: .35rem; text-align: left; line-height: 1.35;
+  background: var(--bg); border-radius: 8px;
+}
+#pickerGrid img {
+  display: block; width: 100%; height: 8rem; object-fit: contain; border-radius: 5px;
+  background: repeating-conic-gradient(var(--line) 0 25%, transparent 0 50%) 0 0/12px 12px;
+}
+.pickname { display: block; font-size: .78rem; margin-top: .3rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pickmeta { display: block; font-size: .7rem; color: var(--dim); }
+.pickmissing {
+  display: grid; place-items: center; height: 8rem; border-radius: 5px;
+  background: var(--panel); color: var(--dim); font-size: .75rem;
+}
 
 /* Anything transient goes to the same corner, so no part of the page has to keep room
    free for a message that is usually not there. */
@@ -185,10 +225,13 @@ details.more .row { margin-top: .6rem; }
   <div class="body">
   <div class="drop" id="gifDrop">Drop a GIF here, or click to choose one</div>
   <input type="file" id="gifInput" accept="image/gif" hidden>
+  <div class="row">
+    <button id="browseBtn">Browse GIFs</button>
+  </div>
+  <div class="say" id="gifCredit"></div>
   <div id="gifBody" hidden>
     <div class="row">
       <button id="suggestBtn">Suggest beat frames</button>
-      <label>for a loop of <input type="number" id="suggestCount" min="1" step="1" value="8"> beats</label>
     </div>
     <div id="beatStrip"></div>
     <div class="say" id="beatList"></div>
@@ -204,6 +247,9 @@ details.more .row { margin-top: .6rem; }
       <div class="row">
         <button id="undoMarkBtn">Undo</button>
         <button id="clearBtn">Clear all marks</button>
+      </div>
+      <div class="row">
+        <label>Suggest <input type="number" id="suggestCount" min="1" step="1" value="8"> beat frames</label>
       </div>
       <div class="row">
         <button id="gifPlayBtn">Play the GIF</button>
@@ -263,42 +309,38 @@ details.more .row { margin-top: .6rem; }
     <div class="row"><span class="say" id="audioSummary"></span></div>
     <div class="row legend">
       <span><svg class="glyph g-mark" viewBox="0 0 12 18" aria-hidden="true">
-        <polygon points="1,0 11,0 6,7" fill="currentColor"/>
-        <line x1="6" y1="0" x2="6" y2="9" stroke="currentColor" stroke-width="2"/></svg>
+        <line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="2"/></svg>
         beats you marked in the song</span>
       <span><svg class="glyph g-grid" viewBox="0 0 12 18" aria-hidden="true">
-        <polygon points="1,18 11,18 6,11" fill="currentColor"/>
-        <line x1="6" y1="18" x2="6" y2="9" stroke="currentColor" stroke-width="2.5" stroke-dasharray="5 4"/></svg>
+        <polygon points="1,18 11,18 6,9" fill="currentColor"/></svg>
         where the gif's beat frames land</span>
       <span><svg class="glyph g-loop" viewBox="0 0 12 18" aria-hidden="true">
-        <rect x="3" y="0" width="6" height="6" fill="currentColor"/>
-        <line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="1"/></svg>
+        <polygon points="1,0 11,0 6,9" fill="currentColor"/></svg>
         where the gif's loop restarts</span>
     </div>
   </div>
 
-  <details class="more">
-    <summary>Change the beats by hand</summary>
+  <div class="row hits">
+    <label>The GIF hits
+      <select id="hits">
+        <option value="0.25">every 4 beats</option>
+        <option value="0.5">every 2 beats</option>
+        <option value="1" selected>every beat</option>
+        <option value="2">twice a beat</option>
+        <option value="4">four times a beat</option>
+      </select>
+    </label>
+  </div>
+
+  <details class="more spaced">
+    <summary>More controls</summary>
     <div class="row">
       <button id="tapBtn">Tap the tempo</button>
-      <button id="tapBeatBtn">Tap a beat (B)</button>
+      <span id="tapBeatWrap"><button id="tapBeatBtn">Tap a beat (B)</button></span>
       <button id="undoBeatBtn">Undo</button>
       <button id="clearBeatsBtn">Clear all beats</button>
     </div>
-  </details>
-
-  <details class="more">
-    <summary>More options</summary>
     <div class="row">
-      <label>The GIF hits
-        <select id="hits">
-          <option value="0.25">every 4 beats</option>
-          <option value="0.5">every 2 beats</option>
-          <option value="1" selected>every beat</option>
-          <option value="2">twice a beat</option>
-          <option value="4">four times a beat</option>
-        </select>
-      </label>
       <label>Between beats
         <select id="interpolation">
           <option value="linear">even</option>
@@ -324,6 +366,25 @@ details.more .row { margin-top: .6rem; }
 </div>
 
 </main>
+
+<dialog id="picker">
+  <div class="pickerhead">
+    <strong>Animated GIFs on Wikimedia Commons</strong>
+    <input type="search" id="pickerQuery" placeholder="Search, or leave empty to browse">
+    <button id="pickerSearch" class="primary">Search</button>
+    <button id="pickerClose">Close</button>
+  </div>
+  <div id="pickerChips">
+    <button>dance</button>
+    <button>cat</button>
+    <button>walking</button>
+    <button>muybridge</button>
+    <button>fire</button>
+    <button>animation</button>
+  </div>
+  <div class="say" id="pickerNote"></div>
+  <div id="pickerGrid"></div>
+</dialog>
 
 <div id="toasts" aria-live="polite"></div>
 
@@ -400,7 +461,7 @@ function remember(history, snapshot) {
 }
 
 const state = {
-  gifFile: null, frames: [], holds: [], width: 0, height: 0, cur: 0, beats: new Set(),
+  gifFile: null, frames: [], holds: [], width: 0, height: 0, cur: 0, beats: new Set(), credit: null,
   audioFile: null, audioBuffer: null, audioBeats: [], peaks: null,
 };
 
@@ -481,6 +542,7 @@ async function loadGif(file) {
   state.height = frames[0].height;
   state.cur = 0;
   state.beats = new Set();
+  state.credit = null;
   markHistory.length = 0;
 
   $("gifDrop").textContent = `${file.name} — ${count} frames, ${state.width}×${state.height}. Drop another to replace.`;
@@ -493,6 +555,7 @@ async function loadGif(file) {
   $("previewCanvas").height = state.height;
 
   $("suggestCount").max = frames.length;
+  $("suggestCount").value = evenBeatCount(parseInt($("suggestCount").value, 10) || 1, frames.length);
   // Start from a suggestion rather than an empty strip: correcting marks that are roughly
   // right is much less work than placing the first one from nothing
   state.beats = suggestBeatFrames(parseInt($("suggestCount").value, 10) || 1);
@@ -513,6 +576,23 @@ async function loadGif(file) {
 // onto whichever of its two neighbours changes most gets a little closer still: 0.60 and
 // 0.50 frames of average error against the two, where marks thrown down at random score
 // about 3. The nudge is held to one frame because widening it made things worse.
+
+// A beat covers a whole number of frames, so a count that does not divide the gif leaves
+// some beats holding a frame more than others: 20 frames over 8 beats alternates 3 and 2,
+// which is a 50% speed oscillation, and the loop's last gap is one of the short ones — the
+// animation visibly stalls on its final frames just before it cuts back to the start.
+// Moving the automatic count to a nearby divisor removes it outright. Nothing nearby
+// divides a prime frame count, and shoving 8 up to 17 would be worse than the limp, so in
+// that case the asked-for count stands and the unevenness is unavoidable.
+function evenBeatCount(wanted, n) {
+  const near = [];
+  for (let d = 1; d <= n; d++) {
+    if (n % d === 0 && Math.abs(d - wanted) <= wanted / 4) near.push(d);
+  }
+  if (!near.length) return wanted;
+  return near.reduce((a, d) => (Math.abs(d - wanted) < Math.abs(a - wanted) ? d : a));
+}
+
 const SUGGEST_SIZE = 64;
 
 // How much the picture changes from the frame before, for every frame around the loop
@@ -603,7 +683,7 @@ function buildBeatStrip() {
 
   const strip = $("beatStrip");
   strip.replaceChildren();
-  beats.forEach((frame, i) => {
+  for (const frame of beats) {
     const bmp = state.frames[frame];
     const h = 54, w = Math.max(1, Math.round((bmp.width / bmp.height) * h));
     const c = document.createElement("canvas");
@@ -611,15 +691,14 @@ function buildBeatStrip() {
     c.getContext("2d").drawImage(bmp, 0, 0, w, h);
 
     const caption = document.createElement("figcaption");
-    caption.textContent = `Beat ${i + 1}`;
+    caption.textContent = `Frame ${frame + 1}`;
 
     const item = document.createElement("figure");
     item.dataset.frame = frame;
-    item.title = `Frame ${frame + 1}`;
     item.append(c, caption);
     item.onclick = () => { state.cur = frame; drawFrame(); refresh(); };
     strip.append(item);
-  });
+  }
 }
 
 // No browser's video encoder will keep an alpha channel, so a transparent pixel has to
@@ -733,6 +812,153 @@ addEventListener("keydown", (e) => {
   else if (e.key === " ") { toggleMark(); e.preventDefault(); }
   else if (e.key === "b" || e.key === "B") { tapBeat(); e.preventDefault(); }
 });
+
+/* --------------------------------------------------------------- gif picker */
+
+// Wikimedia Commons rather than Giphy: it needs no API key, it answers cross-origin, and
+// every file states a licence that allows the reuse this tool is for. Its "Animated GIF
+// files" category is 31k files deep, and its thumbnails are themselves animated, so the
+// grid shows what each one actually does.
+const COMMONS = "https://commons.wikimedia.org/w/api.php";
+const COMMONS_CATEGORY = 'incategory:"Animated GIF files"';
+
+// A gif this big has hundreds of full-resolution frames behind it, and decoding them all
+// into bitmaps is enough to bring the tab down
+const PICKER_MAX_BYTES = 20e6;
+
+// Commons hands back author and licence as HTML written by whoever uploaded the file.
+// Parsing it detached and keeping only the text keeps that out of the page as markup.
+function plainText(html) {
+  if (!html) return "";
+  return new DOMParser().parseFromString(String(html), "text/html").body.textContent.trim();
+}
+
+async function searchCommons(term) {
+  const query = new URLSearchParams({
+    action: "query", generator: "search",
+    gsrsearch: `${term} ${COMMONS_CATEGORY}`.trim(),
+    // A thumbnail of an animated gif is itself animated, so a page of them is megabytes;
+    // two dozen at 200px is enough to browse without leaning on Commons
+    gsrnamespace: "6", gsrlimit: "24",
+    prop: "imageinfo", iiprop: "url|size|mime|extmetadata", iiurlwidth: "200",
+    format: "json", origin: "*",
+  });
+
+  const response = await fetch(`${COMMONS}?${query}`);
+  if (!response.ok) throw new Error(`Commons search failed (${response.status}).`);
+  const body = await response.json();
+
+  const pages = Object.values(body.query?.pages ?? {}).sort((a, b) => a.index - b.index);
+  const found = [];
+  let tooBig = 0;
+
+  for (const page of pages) {
+    const file = page.imageinfo?.[0];
+    if (!file || file.mime !== "image/gif" || !file.thumburl) continue;
+    if (file.size > PICKER_MAX_BYTES) { tooBig++; continue; }
+
+    const meta = file.extmetadata ?? {};
+    found.push({
+      title: page.title.replace(/^File:/, "").replace(/\.gif$/i, ""),
+      url: file.url,
+      thumb: file.thumburl,
+      bytes: file.size,
+      author: plainText(meta.Artist?.value) || "unknown author",
+      licence: plainText(meta.LicenseShortName?.value) || "see Commons",
+      page: page.title,
+    });
+  }
+  return { found, tooBig };
+}
+
+function missingThumb() {
+  const box = document.createElement("span");
+  box.className = "pickmissing";
+  box.textContent = "no preview";
+  return box;
+}
+
+function renderPicker({ found, tooBig }, term) {
+  const grid = $("pickerGrid");
+  grid.replaceChildren();
+
+  for (const item of found) {
+    const image = document.createElement("img");
+    image.src = item.thumb;
+    image.alt = item.title;
+    image.loading = "lazy";
+    // Commons rate-limits, and a refused thumbnail would otherwise leave a blank tile
+    // that looks like a broken gif rather than a preview that did not arrive
+    image.onerror = () => { image.replaceWith(missingThumb()); };
+
+    const name = document.createElement("span");
+    name.className = "pickname";
+    name.textContent = item.title;
+
+    const meta = document.createElement("span");
+    meta.className = "pickmeta";
+    meta.textContent = `${item.licence} · ${item.author} · ${(item.bytes / 1e6).toFixed(1)}MB`;
+
+    const card = document.createElement("button");
+    card.title = `${item.title}\n${item.author}\n${item.licence}`;
+    card.append(image, name, meta);
+    card.onclick = () => useCommonsGif(item);
+    grid.append(card);
+  }
+
+  $("pickerNote").textContent = found.length
+    ? `${found.length} shown` + (tooBig ? `, ${tooBig} hidden for being over ${PICKER_MAX_BYTES / 1e6}MB` : "")
+    : `Nothing animated found for “${term}”.`;
+}
+
+async function useCommonsGif(item) {
+  $("picker").close();
+  toast("picker", `Fetching ${item.title} — ${(item.bytes / 1e6).toFixed(1)}MB…`, { stay: true });
+  try {
+    const response = await fetch(item.url);
+    if (!response.ok) throw new Error(`Could not fetch ${item.title} (${response.status}).`);
+    const blob = await response.blob();
+    await loadGif(new File([blob], `${item.title}.gif`, { type: "image/gif" }));
+
+    state.credit = item;
+    refresh();
+    dismiss("picker");
+  } catch (err) {
+    dismiss("picker");
+    fail(err);
+  }
+}
+
+async function runPickerSearch() {
+  const term = $("pickerQuery").value.trim();
+  $("pickerNote").textContent = "Searching…";
+  try {
+    renderPicker(await searchCommons(term), term);
+  } catch (err) {
+    $("pickerGrid").replaceChildren();
+    $("pickerNote").textContent = err.message;
+  }
+}
+
+$("browseBtn").onclick = () => {
+  $("picker").showModal();
+  if (!$("pickerGrid").children.length) runPickerSearch();
+};
+$("pickerClose").onclick = () => $("picker").close();
+$("pickerSearch").onclick = runPickerSearch;
+// What the catalogue is actually good for is not obvious from an empty search box, and
+// these terms are where the cyclic, clearly-accented animations turn out to be
+for (const chip of document.querySelectorAll("#pickerChips button")) {
+  chip.onclick = () => {
+    $("pickerQuery").value = chip.textContent;
+    runPickerSearch();
+  };
+}
+
+$("pickerQuery").onkeydown = (e) => {
+  if (e.key === "Enter") { e.preventDefault(); runPickerSearch(); }
+  e.stopPropagation();
+};
 
 /* -------------------------------------------------------------------- example */
 
@@ -873,65 +1099,46 @@ function drawWave(playheadSeconds = null) {
   }
 
   // Where each beat frame of the animation will land, and where the loop starts over.
-  // Batched into paths because a fast setting puts a couple of thousand lines here.
+  // Both are triangles biting in from an edge rather than lines, so they stay clear of
+  // the waveform and of the song's own beats, which are the only full-height marks.
   if (currentTiming) {
     const step = currentTiming.msPerBeat / 1000;
-    const grid = new Path2D(), gridCaps = new Path2D(), loop = new Path2D(), loopCaps = new Path2D();
-    // The square caps only go on where there is room to tell them apart; packed tighter
-    // than that they merge into a solid band and say less than the bare lines do.
-    const caps = (step / duration) * w >= 5;
+    const spacing = (step / duration) * w;
+    // narrow the triangles as they crowd, or a fast setting smears them into one band
+    const half = Math.max(1.5, Math.min(5, spacing / 2.5));
+    const grid = new Path2D(), loop = new Path2D();
+
     for (let k = 0; ; k++) {
       const t = downbeat() + k * step;
       if (t >= duration) break;
       const x = at(t);
       if (k % currentTiming.beats.length === 0) {
-        loop.moveTo(x, 0);
-        loop.lineTo(x, h);
-        if (caps) loopCaps.rect(x - 3, 0, 6, 6);
+        loop.moveTo(x - half, 0);
+        loop.lineTo(x + half, 0);
+        loop.lineTo(x, 9);
       } else {
-        grid.moveTo(x, h * 0.38);
-        grid.lineTo(x, h);
-        if (caps) {
-          gridCaps.moveTo(x - 4, h);
-          gridCaps.lineTo(x + 4, h);
-          gridCaps.lineTo(x, h - 7);
-          gridCaps.closePath();
-        }
+        grid.moveTo(x - half, h);
+        grid.lineTo(x + half, h);
+        grid.lineTo(x, h - 9);
       }
+      (k % currentTiming.beats.length === 0 ? loop : grid).closePath();
     }
-    // These are the marks the whole page is for — where the animation actually hits — so
-    // they stand up off the bottom with a flag on, rather than being a faint tick
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash([5, 4]);
-    ctx.strokeStyle = css.getPropertyValue("--grid");
-    ctx.stroke(grid);
-    ctx.setLineDash([]);
+
     ctx.fillStyle = css.getPropertyValue("--grid");
-    ctx.fill(gridCaps);
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = css.getPropertyValue("--loop");
-    ctx.stroke(loop);
+    ctx.fill(grid);
     ctx.fillStyle = css.getPropertyValue("--loop");
-    ctx.fill(loopCaps);
+    ctx.fill(loop);
   }
 
-  const beatLines = new Path2D(), flags = new Path2D();
+  const beatLines = new Path2D();
   for (const t of state.audioBeats) {
     const x = at(t);
     beatLines.moveTo(x, 0);
-    beatLines.lineTo(x, h * 0.4);
-    // a flag on the very first beat would otherwise hang off the left edge
-    const fx = Math.min(Math.max(x, 4), w - 4);
-    flags.moveTo(fx - 4, 0);
-    flags.lineTo(fx + 4, 0);
-    flags.lineTo(fx, 7);
-    flags.closePath();
+    beatLines.lineTo(x, h);
   }
   ctx.strokeStyle = css.getPropertyValue("--accent");
   ctx.lineWidth = 2;
   ctx.stroke(beatLines);
-  ctx.fillStyle = css.getPropertyValue("--accent");
-  ctx.fill(flags);
 
   if (playheadSeconds !== null) {
     ctx.strokeStyle = css.getPropertyValue("--ink");
@@ -1071,6 +1278,10 @@ function tickPlayback() {
 function syncTransport() {
   $("previewBtn").textContent = playback ? "Stop" : "Play preview";
   $("tapBeatBtn").disabled = !playback;
+  // a disabled button swallows its own hover, so the reason hangs off the wrapper
+  $("tapBeatWrap").title = playback
+    ? "Tap on each beat you hear."
+    : "Only while the preview is playing — this is for tapping along to the music.";
   $("gifPlayBtn").textContent = gifPlayback ? "Stop the GIF" : "Play the GIF";
 }
 
@@ -1509,6 +1720,19 @@ function computeTiming() {
 
 function refresh() {
   const ready = { gif: state.frames.length > 0, audio: !!state.audioBuffer };
+
+  // A Commons licence asks to be credited, so what to credit stays on screen
+  const credit = $("gifCredit");
+  credit.replaceChildren();
+  if (state.credit) {
+    const link = document.createElement("a");
+    link.href = `https://commons.wikimedia.org/wiki/${encodeURIComponent(state.credit.page)}`;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = state.credit.title;
+    credit.append(link, document.createTextNode(
+      ` by ${state.credit.author} · ${state.credit.licence} · Wikimedia Commons`));
+  }
 
   $("undoMarkBtn").disabled = !markHistory.length;
   $("undoBeatBtn").disabled = !beatHistory.length;
