@@ -473,6 +473,9 @@ async function loadGif(file) {
   $("previewCanvas").height = state.height;
 
   $("suggestCount").max = frames.length;
+  // Start from a suggestion rather than an empty strip: correcting marks that are roughly
+  // right is much less work than placing the first one from nothing
+  state.beats = suggestBeatFrames(parseInt($("suggestCount").value, 10) || 1);
   beatStripKey = null;
   buildStrip();
   drawFrame();
@@ -523,9 +526,13 @@ function suggestBeatFrames(beats) {
   const motion = frameMotion();
 
   const grid = Array.from({ length: count }, (_, j) => Math.round((j * n) / count) % n);
+
+  // Packed tightly enough, one frame is a quarter of the gap and the nudge stops being a
+  // nudge: it bunches marks together and leaves the spread worse than it found it
+  const nudge = n / count >= 4 ? 1 : 0;
   const nudged = grid.map((at) => {
     let best = at;
-    for (const offset of [-1, 1]) {
+    for (const offset of [-nudge, nudge]) {
       const i = (at + offset + n) % n;
       if (motion[i] > motion[best]) best = i;
     }
