@@ -24,9 +24,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      # Hold the retiming to the values recorded in timing_cases.json rather than
-      # letting a deploy quietly change how the frames are spaced
+      # Hold the retiming and the tempo front end to the values recorded alongside them,
+      # rather than letting a deploy quietly change how frames are spaced or how the
+      # tempo model is fed
       - run: node docs/test_timing.mjs
+      - run: node docs/test_tempo.mjs
 
   deploy:
     needs: check

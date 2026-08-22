@@ -636,17 +636,19 @@ $("tapBtn").onclick = () => {
 
 /* ------------------------------------------------------------ tempo estimate */
 
+/* --- tempo:start --- pinned by docs/test_tempo.mjs against tempo_cases.json --- */
+
 // TempoCNN's front end, matched against essentia's TensorflowInputTempoCNN: 11025Hz mono,
 // 1024-sample frames every 512, Hann, magnitude spectrum, 40 Slaney mel bands over
 // 20-5000Hz with unit-triangle normalisation. Reproduces essentia's mel matrix to 1.5e-7.
-const TEMPO_SR = 11025, TEMPO_FRAME = 1024, TEMPO_HOP = 512, TEMPO_BANDS = 40, TEMPO_PATCH = 256;
+export const TEMPO_SR = 11025, TEMPO_FRAME = 1024, TEMPO_HOP = 512, TEMPO_BANDS = 40, TEMPO_PATCH = 256;
 
 const MEL_F_SP = 200 / 3, MEL_LOG_HZ = 1000;
 const MEL_LOG_STEP = Math.log(6.4) / 27, MEL_LOG_MEL = MEL_LOG_HZ / MEL_F_SP;
 const hzToMel = (f) => (f < MEL_LOG_HZ ? f / MEL_F_SP : MEL_LOG_MEL + Math.log(f / MEL_LOG_HZ) / MEL_LOG_STEP);
 const melToHz = (m) => (m < MEL_LOG_MEL ? m * MEL_F_SP : MEL_LOG_HZ * Math.exp(MEL_LOG_STEP * (m - MEL_LOG_MEL)));
 
-function melFilterbank(lo = 20, hi = 5000) {
+export function melFilterbank(lo = 20, hi = 5000) {
   const bins = TEMPO_FRAME / 2 + 1;
   const loMel = hzToMel(lo), hiMel = hzToMel(hi);
   const edges = Array.from({ length: TEMPO_BANDS + 2 }, (_, i) =>
@@ -690,7 +692,7 @@ function fft(re, im) {
   }
 }
 
-function melSpectrogram(samples) {
+export function melSpectrogram(samples) {
   const fb = melFilterbank();
   const bins = TEMPO_FRAME / 2 + 1;
   // denominator is size-1, which is the Hann essentia uses
@@ -714,6 +716,8 @@ function melSpectrogram(samples) {
   }
   return rows;
 }
+
+/* --- tempo:end --- */
 
 let tempoModel = null;
 
