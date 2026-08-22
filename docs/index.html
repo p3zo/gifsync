@@ -30,13 +30,32 @@ kbd {
   font: inherit; font-family: var(--mono); font-size: .8em; padding: .05em .35em;
   border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink);
 }
-h2 { font-size: .8rem; margin: 0 0 .75rem; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); }
+h2 { font-size: .95rem; margin: 0 0 .9rem; display: flex; align-items: center; gap: .5rem; }
 main { max-width: 68rem; margin: 0 auto; display: grid; gap: 1rem; }
 section {
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1rem;
   min-width: 0; /* let the filmstrip scroll rather than stretching the page */
 }
-section[data-off] { opacity: .45; pointer-events: none; }
+section.is-current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+/* a locked step collapses to its reason: nothing to read, nothing to reach for */
+.is-locked .body { display: none; }
+.is-locked .why { margin-bottom: 0; }
+.num {
+  display: grid; place-items: center; flex: none; width: 1.4rem; height: 1.4rem;
+  border-radius: 50%; background: var(--line); color: var(--ink); font-size: .75rem; font-weight: 700;
+}
+.is-current .num { background: var(--accent); color: var(--accent-ink); }
+.is-done .num { background: var(--ok); color: var(--bg); }
+.chip { margin-left: auto; font-size: .7rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--ok); }
+.why { margin: -.3rem 0 .9rem; color: var(--dim); font-size: .875rem; }
+.why:empty { display: none; }
+.empty {
+  display: grid; place-items: center; min-height: 9rem; margin-bottom: .75rem; padding: 1rem;
+  border: 1.5px dashed var(--line); border-radius: 8px; color: var(--dim); font-size: .875rem;
+  text-align: center;
+}
+.empty[hidden] { display: none; }
 .row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
 .row + .row { margin-top: .75rem; }
 button {
@@ -62,6 +81,7 @@ input[type=number] { width: 6rem; }
   background: repeating-conic-gradient(var(--line) 0 25%, transparent 0 50%) 0 0/16px 16px;
   border-radius: 6px; margin-bottom: .75rem;
 }
+#frameCanvas[hidden], #previewCanvas[hidden] { display: none; }
 #strip { display: flex; gap: 3px; overflow-x: auto; padding: .5rem 0; margin-top: .75rem; }
 #strip canvas {
   height: 54px; flex: none; border-radius: 3px; cursor: pointer;
@@ -101,9 +121,11 @@ a#download[hidden] { display: none; }
   <div class="mono" id="unsupportedWhy"></div>
 </section>
 
-<section id="secGif">
-  <h2>GIF</h2>
-  <div class="drop" id="gifDrop">Drop a GIF, or click to choose</div>
+<section id="secGif" class="step">
+  <h2><span class="num">1</span> Your GIF <span class="chip" id="secGifChip"></span></h2>
+  <p class="why" id="secGifWhy"></p>
+  <div class="body">
+  <div class="drop" id="gifDrop">Drop a GIF here, or click to choose one</div>
   <input type="file" id="gifInput" accept="image/gif" hidden>
   <div id="gifBody" hidden>
     <canvas id="frameCanvas"></canvas>
@@ -117,11 +139,14 @@ a#download[hidden] { display: none; }
     <div id="strip"></div>
     <div class="mono" id="beatList"></div>
   </div>
+  </div>
 </section>
 
-<section id="secAudio">
-  <h2>Song</h2>
-  <div class="drop" id="audioDrop">Drop an audio file, or click to choose</div>
+<section id="secAudio" class="step">
+  <h2><span class="num">2</span> Your song <span class="chip" id="secAudioChip"></span></h2>
+  <p class="why" id="secAudioWhy"></p>
+  <div class="body">
+  <div class="drop" id="audioDrop">Drop a song here, or click to choose one</div>
   <input type="file" id="audioInput" accept="audio/*" hidden>
   <div id="audioBody" hidden>
     <canvas id="wave"></canvas>
@@ -136,11 +161,15 @@ a#download[hidden] { display: none; }
       &nbsp; <span class="key k-loop"></span> where the gif's loop restarts
     </span></div>
   </div>
+  </div>
 </section>
 
-<section id="secSync" data-off>
-  <h2>Sync</h2>
+<section id="secSync" class="step">
+  <h2><span class="num">3</span> Line them up <span class="chip" id="secSyncChip"></span></h2>
+  <p class="why" id="secSyncWhy"></p>
+  <div class="body">
   <canvas id="previewCanvas"></canvas>
+  <div class="empty" id="previewEmpty">Your GIF plays here, in time with the song.</div>
   <div class="row">
     <button id="previewBtn" class="primary">Play preview</button>
     <span class="mono" id="previewPos"></span>
@@ -169,16 +198,20 @@ a#download[hidden] { display: none; }
     <label><input type="checkbox" id="clickTrack"> Click track</label>
   </div>
   <div class="row"><span class="mono" id="timingSummary"></span></div>
+  </div>
 </section>
 
-<section id="secRender" data-off>
-  <h2>Render</h2>
+<section id="secRender" class="step">
+  <h2><span class="num">4</span> Save the video <span class="chip" id="secRenderChip"></span></h2>
+  <p class="why" id="secRenderWhy"></p>
+  <div class="body">
   <div class="row">
     <button id="renderBrowserBtn" class="primary">Render</button>
   </div>
   <div class="row"><span class="mono warn" id="codecNote"></span></div>
   <pre id="log"></pre>
   <a id="download" hidden>Download</a>
+  </div>
 </section>
 
 </main>
@@ -239,6 +272,8 @@ export function getFrameOrder(firstBeatFrame, nFrames) {
 
 /* --- timing:end --- */
 
+let rendered = false;
+
 const state = {
   gifFile: null, frames: [], width: 0, height: 0, cur: 0, beats: new Set(),
   audioFile: null, audioBuffer: null, audioBeats: [], peaks: null,
@@ -278,6 +313,7 @@ async function loadGif(file) {
   // A playing source keeps the buffer and frames it started with, so it would carry on
   // against a page that has already moved to the new file
   stopPlayback();
+  clearRender();
   $("gifDrop").textContent = `Decoding ${file.name}…`;
 
   const decoder = new ImageDecoder({ data: await file.arrayBuffer(), type: "image/gif" });
@@ -377,6 +413,7 @@ const actx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate
 
 async function loadAudio(file) {
   stopPlayback();
+  clearRender();
   // the previous song's tempo estimate does not describe this one
   $("estimateNote").textContent = "";
   $("audioDrop").textContent = `Decoding ${file.name}…`;
@@ -941,10 +978,33 @@ function refresh() {
         `frame of a 60Hz display, so they will flash past rather than read.</span>` : "");
   }
 
-  $("secSync").toggleAttribute("data-off", !ready.audio);
   $("previewCanvas").hidden = !ready.gif;
+  $("previewEmpty").hidden = ready.gif;
   syncTransport();
-  $("secRender").toggleAttribute("data-off", !(currentTiming && ready.audio));
+
+  const missing = !ready.gif && !ready.audio ? "Add a GIF and a song first."
+    : !ready.gif ? "Add a GIF first."
+    : !ready.audio ? "Add a song first." : "";
+
+  const steps = [
+    { id: "secGif", done: ready.gif && state.beats.size > 0, why: "" },
+    { id: "secAudio", done: ready.audio && state.audioBeats.length > 0, why: "" },
+    { id: "secSync", done: !!currentTiming, why: missing },
+    { id: "secRender", done: rendered,
+      why: missing || (currentTiming ? "" : "Mark a beat frame in your GIF first.") },
+  ];
+
+  // Point at the first step still to do, so there is always one obvious place to look
+  const current = steps.findIndex((s) => !s.done && !s.why);
+  steps.forEach((s, i) => {
+    // a locked step cannot also be finished, whatever its own condition says
+    const done = s.done && !s.why;
+    $(s.id).classList.toggle("is-locked", !!s.why);
+    $(s.id).classList.toggle("is-done", done);
+    $(s.id).classList.toggle("is-current", i === current);
+    $(s.id + "Why").textContent = s.why;
+    $(s.id + "Chip").textContent = done ? "Done" : "";
+  });
 
   // Tempo changes take effect on the running preview; moving the downbeat has to
   // restart it, since that is where the audio is playing from
@@ -1401,6 +1461,16 @@ function readOpusPreSkip(description) {
   return description[10] | (description[11] << 8);
 }
 
+// A finished video belongs to the files it was made from, so a new one retires it
+function clearRender() {
+  rendered = false;
+  $("log").textContent = "";
+  const link = $("download");
+  if (link.href) URL.revokeObjectURL(link.href);
+  link.removeAttribute("href");
+  link.hidden = true;
+}
+
 function offerDownload(blob, filename) {
   const link = $("download");
   if (link.href) URL.revokeObjectURL(link.href);
@@ -1421,8 +1491,7 @@ $("renderBrowserBtn").onclick = async () => {
   if (!timing) return;
 
   button.disabled = true;
-  $("log").textContent = "";
-  $("download").hidden = true;
+  clearRender();
 
   try {
     const seconds = state.audioBuffer.duration - downbeat();
@@ -1441,6 +1510,8 @@ $("renderBrowserBtn").onclick = async () => {
         `${audio.preSkip} samples of encoder priming skipped`);
 
     offerDownload(buildMp4(video, audio), outputName());
+    rendered = true;
+    refresh();
     log("Done.");
   } catch (err) {
     fail(err);
