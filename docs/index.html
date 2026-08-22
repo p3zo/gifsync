@@ -1,0 +1,1140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>gifsync beat marker</title>
+<style>
+:root {
+  --bg: #ffffff; --panel: #f4f4f5; --line: #d9d9de; --ink: #18181b;
+  --dim: #6b6b76; --accent: #d6336c; --accent-ink: #ffffff; --ok: #1a7f4b;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131316; --panel: #1c1c21; --line: #33333c; --ink: #ececf0;
+    --dim: #9a9aa6; --accent: #f06595; --accent-ink: #1a1a1f; --ok: #4ade80;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 0 1.25rem 4rem; background: var(--bg); color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+header {
+  display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap;
+  max-width: 68rem; margin: 0 auto; padding: 1.5rem 0 1rem;
+}
+h1 { font-size: 1.15rem; margin: 0; letter-spacing: -.01em; }
+h2 { font-size: .8rem; margin: 0 0 .75rem; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); }
+main { max-width: 68rem; margin: 0 auto; display: grid; gap: 1rem; }
+section {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1rem;
+  min-width: 0; /* let the filmstrip scroll rather than stretching the page */
+}
+section[data-off] { opacity: .45; pointer-events: none; }
+.row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.row + .row { margin-top: .75rem; }
+button {
+  font: inherit; font-size: .875rem; padding: .35rem .7rem; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--dim); }
+button:disabled { opacity: .4; cursor: default; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+label { display: inline-flex; align-items: center; gap: .4rem; font-size: .875rem; }
+input[type=number], select { font: inherit; font-size: .875rem; padding: .3rem .4rem; width: 6.5rem;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.drop {
+  border: 1.5px dashed var(--line); border-radius: 8px; padding: 1.75rem 1rem; text-align: center;
+  color: var(--dim); cursor: pointer; font-size: .9rem;
+}
+.drop.over { border-color: var(--accent); color: var(--ink); }
+#frameCanvas, #previewCanvas {
+  display: block; max-width: 100%; max-height: 340px; width: auto; image-rendering: pixelated;
+  background: repeating-conic-gradient(var(--line) 0 25%, transparent 0 50%) 0 0/16px 16px;
+  border-radius: 6px; margin-bottom: .75rem;
+}
+#strip { display: flex; gap: 3px; overflow-x: auto; padding: .5rem 0; margin-top: .75rem; }
+#strip canvas {
+  height: 54px; flex: none; border-radius: 3px; cursor: pointer;
+  border: 2px solid transparent; background: var(--bg);
+}
+#strip canvas.cur { border-color: var(--ink); }
+#strip canvas.beat { border-color: var(--accent); }
+#strip canvas.cur.beat { outline: 2px solid var(--ink); outline-offset: 1px; }
+#wave { display: block; width: 100%; height: 110px; cursor: crosshair; border-radius: 6px; background: var(--bg); }
+.mono { font-family: var(--mono); font-size: .8rem; color: var(--dim); }
+.mono b { color: var(--ink); font-weight: 600; }
+.warn { color: var(--accent); }
+#log {
+  font-family: var(--mono); font-size: .75rem; white-space: pre-wrap; word-break: break-word;
+  max-height: 15rem; overflow-y: auto; margin: .75rem 0 0; padding: .6rem;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+}
+#log:empty { display: none; }
+a#download { display: inline-block; margin-top: .75rem; color: var(--accent); font-weight: 600; }
+a#download[hidden] { display: none; }
+#mode { font-family: var(--mono); font-size: .75rem; color: var(--dim); }
+#unsupported { border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>gifsync beat marker</h1>
+  <span id="mode"></span>
+</header>
+
+<main>
+
+<section id="unsupported" hidden>
+  <h2>Unsupported browser</h2>
+  <div class="mono" id="unsupportedWhy"></div>
+</section>
+
+<section id="secGif">
+  <h2>GIF</h2>
+  <div class="drop" id="gifDrop">Drop a GIF, or click to choose</div>
+  <input type="file" id="gifInput" accept="image/gif" hidden>
+  <div id="gifBody" hidden>
+    <canvas id="frameCanvas"></canvas>
+    <div class="row">
+      <button id="prevBtn">&#9664;</button>
+      <button id="nextBtn">&#9654;</button>
+      <button id="markBtn" class="primary">Mark beat (space)</button>
+      <button id="clearBtn">Clear marks</button>
+      <span class="mono" id="framePos"></span>
+    </div>
+    <div id="strip"></div>
+    <div class="mono" id="beatList"></div>
+  </div>
+</section>
+
+<section id="secAudio" data-off>
+  <h2>Song</h2>
+  <div class="drop" id="audioDrop">Drop an audio file, or click to choose</div>
+  <input type="file" id="audioInput" accept="audio/*" hidden>
+  <div id="audioBody" hidden>
+    <canvas id="wave"></canvas>
+    <div class="row">
+      <button id="playBtn">Play from downbeat</button>
+      <button id="clearDownbeat">Reset downbeat</button>
+      <span class="mono" id="downbeatLabel"></span>
+    </div>
+  </div>
+</section>
+
+<section id="secTempo" data-off>
+  <h2>Tempo</h2>
+  <div class="row">
+    <label>BPM <input type="number" id="bpm" step="0.1" min="1" value="120"></label>
+    <button id="tapBtn">Tap</button>
+    <button id="estimateBtn" hidden>Estimate</button>
+    <label>Multiplier <input type="number" id="multiplier" step="0.05" min="0.05" value="1"></label>
+    <label>Easing
+      <select id="interpolation">
+        <option value="linear">linear</option>
+        <option value="quadratic">quadratic</option>
+        <option value="cubic">cubic</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="clickTrack"> Click track</label>
+  </div>
+  <div class="row"><span class="mono" id="timingSummary"></span></div>
+</section>
+
+<section id="secPreview" data-off>
+  <h2>Preview</h2>
+  <canvas id="previewCanvas"></canvas>
+  <div class="row">
+    <button id="previewBtn" class="primary">Play preview</button>
+    <span class="mono" id="previewPos"></span>
+  </div>
+</section>
+
+<section id="secRender" data-off>
+  <h2>Render</h2>
+  <div class="row">
+    <button id="renderBrowserBtn" class="primary">Render here</button>
+    <button id="renderPythonBtn" hidden>Render with sync.py</button>
+    <span class="mono" id="renderNote"></span>
+  </div>
+  <pre id="log"></pre>
+  <a id="download" hidden>Download</a>
+</section>
+
+</main>
+
+<script type="module">
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+
+/* --- timing:start --- shared with sync.py; docs/test_timing.mjs diffs the two --- */
+
+// ffmpeg's concat demuxer rounds durations onto a 40ms grid. WebCodecs takes exact
+// microsecond timestamps, so rendering here is not bound by it, but the CLI is.
+export const CONCAT_TIMEBASE_MS = 40;
+
+const EASINGS = {
+  linear: (t) => t,
+  quadratic: (t) => (t < 0.5 ? 2 * t * t : -2 * t * t + 4 * t - 1),
+  cubic: (t) => {
+    if (t < 0.5) return 4 * t * t * t;
+    const p = 2 * t - 2;
+    return 0.5 * p * p * p + 1;
+  },
+};
+
+export function getDurations(beatFrames, msPerBeat, nFrames, interpolation = "linear") {
+  const ease = EASINGS[interpolation];
+  if (!ease) throw new Error(`interpolation=${interpolation} not supported`);
+
+  if (!beatFrames.length) throw new Error("At least one beat frame is required.");
+
+  const tidy = [...new Set(beatFrames)].sort((a, b) => a - b);
+  if (beatFrames.length !== tidy.length || beatFrames.some((f, i) => f !== tidy[i])) {
+    throw new Error(`Beat frames must be sorted and unique, got ${beatFrames}.`);
+  }
+
+  if (beatFrames[0] < 0 || beatFrames[beatFrames.length - 1] >= nFrames) {
+    throw new Error(`Beat frames must be within [0, ${nFrames - 1}], got ${beatFrames}.`);
+  }
+
+  const durations = [];
+
+  beatFrames.forEach((frame, ix) => {
+    const nextFrame = ix < beatFrames.length - 1 ? beatFrames[ix + 1] : nFrames + beatFrames[0];
+    const n = nextFrame - frame;
+
+    const times = [];
+    for (let x = 0; x <= n; x++) times.push(msPerBeat * ease(x / n));
+    for (let i = 1; i <= n; i++) durations.push(times[i] - times[i - 1]);
+  });
+
+  return durations;
+}
+
+export function getFrameOrder(firstBeatFrame, nFrames) {
+  return Array.from({ length: nFrames }, (_, i) => (firstBeatFrame + i) % nFrames);
+}
+
+/* --- timing:end --- */
+
+let preview = null;
+
+const state = {
+  gifFile: null, frames: [], width: 0, height: 0, cur: 0, beats: new Set(),
+  audioFile: null, audioBuffer: null, downbeat: 0,
+};
+
+/* ---------------------------------------------------------------- capabilities */
+
+const MISSING = [
+  ["ImageDecoder", "stepping through GIF frames"],
+  ["VideoEncoder", "rendering the video"],
+  ["AudioEncoder", "rendering the audio"],
+].filter(([api]) => !(api in window));
+
+if (MISSING.length) {
+  $("unsupported").hidden = false;
+  $("unsupportedWhy").textContent =
+    MISSING.map(([api, what]) => `${api} is missing, so ${what} will not work.`).join("\n") +
+    "\nTry a recent Chrome, Edge, or Safari.";
+}
+
+/* ------------------------------------------------------------------------ gif */
+
+function wireDrop(dropId, inputId, onFile) {
+  const drop = $(dropId), input = $(inputId);
+  drop.onclick = () => input.click();
+  input.onchange = () => input.files[0] && onFile(input.files[0]);
+  drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
+  drop.ondragleave = () => drop.classList.remove("over");
+  drop.ondrop = (e) => {
+    e.preventDefault();
+    drop.classList.remove("over");
+    if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]);
+  };
+}
+
+async function loadGif(file) {
+  $("gifDrop").textContent = `Decoding ${file.name}…`;
+
+  const decoder = new ImageDecoder({ data: await file.arrayBuffer(), type: "image/gif" });
+  await decoder.tracks.ready;
+  // frameCount only settles once the whole gif has been parsed
+  await decoder.completed;
+
+  const count = decoder.tracks.selectedTrack.frameCount;
+  const frames = [];
+  for (let i = 0; i < count; i++) {
+    const { image } = await decoder.decode({ frameIndex: i });
+    frames.push(await createImageBitmap(image));
+    image.close();
+  }
+  decoder.close();
+
+  if (!frames.length) throw new Error(`No frames decoded from ${file.name}.`);
+
+  state.gifFile = file;
+  state.frames = frames;
+  state.width = frames[0].width;
+  state.height = frames[0].height;
+  state.cur = 0;
+  state.beats = new Set();
+
+  $("gifDrop").textContent = `${file.name} — ${count} frames, ${state.width}×${state.height}. Drop another to replace.`;
+  $("gifBody").hidden = false;
+
+  const canvas = $("frameCanvas");
+  canvas.width = state.width;
+  canvas.height = state.height;
+  $("previewCanvas").width = state.width;
+  $("previewCanvas").height = state.height;
+
+  buildStrip();
+  drawFrame();
+  refresh();
+}
+
+function buildStrip() {
+  const strip = $("strip");
+  strip.replaceChildren();
+  state.frames.forEach((bmp, i) => {
+    const h = 54, w = Math.max(1, Math.round((bmp.width / bmp.height) * h));
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    c.title = `frame ${i}`;
+    c.getContext("2d").drawImage(bmp, 0, 0, w, h);
+    c.onclick = () => { state.cur = i; drawFrame(); refresh(); };
+    strip.append(c);
+  });
+}
+
+function drawFrame() {
+  for (const id of ["frameCanvas", "previewCanvas"]) {
+    // The preview canvas tracks the selected frame while it is idle, so it is never blank
+    if (id === "previewCanvas" && preview) continue;
+    const ctx = $(id).getContext("2d");
+    ctx.clearRect(0, 0, state.width, state.height);
+    ctx.drawImage(state.frames[state.cur], 0, 0);
+  }
+}
+
+function step(delta) {
+  if (!state.frames.length) return;
+  state.cur = (state.cur + delta + state.frames.length) % state.frames.length;
+  drawFrame();
+  refresh();
+  $("strip").children[state.cur]?.scrollIntoView({ block: "nearest", inline: "center" });
+}
+
+function toggleMark() {
+  if (!state.frames.length) return;
+  state.beats.has(state.cur) ? state.beats.delete(state.cur) : state.beats.add(state.cur);
+  refresh();
+}
+
+wireDrop("gifDrop", "gifInput", (f) => loadGif(f).catch(fail));
+$("prevBtn").onclick = () => step(-1);
+$("nextBtn").onclick = () => step(1);
+$("markBtn").onclick = toggleMark;
+$("clearBtn").onclick = () => { state.beats.clear(); refresh(); };
+
+addEventListener("keydown", (e) => {
+  if (e.target.matches("input, select, textarea")) return;
+  if (e.key === "ArrowLeft") { step(-1); e.preventDefault(); }
+  else if (e.key === "ArrowRight") { step(1); e.preventDefault(); }
+  else if (e.key === " ") { toggleMark(); e.preventDefault(); }
+});
+
+/* ---------------------------------------------------------------------- audio */
+
+const actx = new (window.AudioContext || window.webkitAudioContext)();
+
+async function loadAudio(file) {
+  $("audioDrop").textContent = `Decoding ${file.name}…`;
+
+  const bytes = await file.arrayBuffer();
+  state.audioBuffer = await actx.decodeAudioData(bytes.slice(0));
+  state.audioFile = file;
+  state.downbeat = 0;
+
+  $("audioDrop").textContent =
+    `${file.name} — ${state.audioBuffer.duration.toFixed(2)}s. Drop another to replace.`;
+  $("audioBody").hidden = false;
+
+  drawWave();
+  refresh();
+}
+
+function drawWave() {
+  const canvas = $("wave");
+  const w = canvas.clientWidth || 800, h = 110;
+  canvas.width = w * devicePixelRatio;
+  canvas.height = h * devicePixelRatio;
+
+  const ctx = canvas.getContext("2d");
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+  ctx.clearRect(0, 0, w, h);
+
+  const data = state.audioBuffer.getChannelData(0);
+  const per = Math.max(1, Math.floor(data.length / w));
+  const css = getComputedStyle(document.body);
+
+  ctx.fillStyle = css.getPropertyValue("--dim");
+  for (let x = 0; x < w; x++) {
+    let peak = 0;
+    for (let i = x * per; i < Math.min((x + 1) * per, data.length); i++) {
+      const v = Math.abs(data[i]);
+      if (v > peak) peak = v;
+    }
+    const bar = Math.max(1, peak * h * 0.9);
+    ctx.fillRect(x, (h - bar) / 2, 1, bar);
+  }
+
+  // Downbeat, then the beat grid running on from it
+  const msPerBeat = getMsPerBeat();
+  if (msPerBeat) {
+    ctx.strokeStyle = css.getPropertyValue("--line");
+    ctx.beginPath();
+    for (let t = state.downbeat; t < state.audioBuffer.duration; t += msPerBeat / 1000) {
+      const x = Math.round((t / state.audioBuffer.duration) * w) + 0.5;
+      ctx.moveTo(x, h * 0.75); ctx.lineTo(x, h);
+    }
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = css.getPropertyValue("--accent");
+  ctx.lineWidth = 2;
+  const dx = (state.downbeat / state.audioBuffer.duration) * w;
+  ctx.beginPath(); ctx.moveTo(dx, 0); ctx.lineTo(dx, h); ctx.stroke();
+}
+
+$("wave").onclick = (e) => {
+  const r = e.currentTarget.getBoundingClientRect();
+  state.downbeat = Math.max(0, Math.min(state.audioBuffer.duration,
+    ((e.clientX - r.left) / r.width) * state.audioBuffer.duration));
+  drawWave();
+  refresh();
+};
+
+$("clearDownbeat").onclick = () => { state.downbeat = 0; drawWave(); refresh(); };
+
+let audition = null;
+$("playBtn").onclick = () => {
+  if (audition) { audition.stop(); return; }
+  actx.resume();
+  const src = actx.createBufferSource();
+  src.buffer = state.audioBuffer;
+  src.connect(actx.destination);
+  src.onended = () => { audition = null; $("playBtn").textContent = "Play from downbeat"; };
+  const t0 = actx.currentTime + 0.05;
+  src.start(t0, state.downbeat);
+  if ($("clickTrack").checked) scheduleClicks(t0, Math.min(30, state.audioBuffer.duration - state.downbeat));
+  audition = src;
+  $("playBtn").textContent = "Stop";
+};
+
+function scheduleClicks(t0, seconds) {
+  const msPerBeat = getMsPerBeat();
+  if (!msPerBeat) return;
+  for (let t = 0; t < seconds; t += msPerBeat / 1000) {
+    const osc = actx.createOscillator(), gain = actx.createGain();
+    osc.frequency.value = 1500;
+    gain.gain.setValueAtTime(0.25, t0 + t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + t + 0.04);
+    osc.connect(gain).connect(actx.destination);
+    osc.start(t0 + t);
+    osc.stop(t0 + t + 0.05);
+  }
+}
+
+wireDrop("audioDrop", "audioInput", (f) => loadAudio(f).catch(fail));
+
+/* --------------------------------------------------------------------- tempo */
+
+let taps = [];
+$("tapBtn").onclick = () => {
+  const now = performance.now();
+  if (taps.length && now - taps[taps.length - 1] > 2000) taps = [];
+  taps.push(now);
+  if (taps.length > 1) {
+    const span = taps[taps.length - 1] - taps[0];
+    $("bpm").value = (60000 / (span / (taps.length - 1))).toFixed(1);
+    refresh();
+  }
+  $("tapBtn").textContent = taps.length > 1 ? `Tap (${taps.length})` : "Tap";
+};
+
+$("estimateBtn").onclick = async () => {
+  const button = $("estimateBtn");
+  if (!state.audioFile) return;
+
+  button.disabled = true;
+  button.textContent = "Estimating…";
+  try {
+    const response = await fetch("api/bpm", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        audio_name: state.audioFile.name,
+        audio_b64: await toBase64(state.audioFile),
+      }),
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || `Server returned ${response.status}`);
+    $("bpm").value = body.bpm.toFixed(1);
+    drawWave();
+    refresh();
+  } catch (err) {
+    fail(err);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Estimate";
+  }
+};
+
+function getMsPerBeat() {
+  const bpm = parseFloat($("bpm").value), mult = parseFloat($("multiplier").value);
+  if (!(bpm > 0) || !(mult > 0)) return null;
+  return 60000 / (bpm * mult);
+}
+
+for (const id of ["bpm", "multiplier", "interpolation"]) {
+  $(id).oninput = () => { if (state.audioBuffer) drawWave(); refresh(); };
+}
+
+/* ------------------------------------------------------------------- timing */
+
+function computeTiming() {
+  const beats = [...state.beats].sort((a, b) => a - b);
+  const msPerBeat = getMsPerBeat();
+  if (!beats.length || !msPerBeat || !state.frames.length) return null;
+
+  const durations = getDurations(beats, msPerBeat, state.frames.length, $("interpolation").value);
+  return {
+    beats, msPerBeat, durations,
+    order: getFrameOrder(beats[0], state.frames.length),
+    loopMs: beats.length * msPerBeat,
+  };
+}
+
+function refresh() {
+  const ready = { gif: state.frames.length > 0, audio: !!state.audioBuffer };
+  $("secAudio").toggleAttribute("data-off", !ready.gif);
+  $("secTempo").toggleAttribute("data-off", !ready.gif);
+
+  $("framePos").textContent = ready.gif ? `frame ${state.cur} of ${state.frames.length - 1}` : "";
+  $("markBtn").textContent = state.beats.has(state.cur) ? "Unmark beat (space)" : "Mark beat (space)";
+
+  [...$("strip").children].forEach((c, i) => {
+    c.classList.toggle("cur", i === state.cur);
+    c.classList.toggle("beat", state.beats.has(i));
+  });
+
+  const beats = [...state.beats].sort((a, b) => a - b);
+  $("beatList").innerHTML = beats.length
+    ? `beat frames <b>${beats.join(" ")}</b>`
+    : "no beat frames marked";
+
+  if (ready.audio) {
+    $("downbeatLabel").innerHTML = `downbeat <b>${state.downbeat.toFixed(3)}s</b>`;
+  }
+
+  let timing = null;
+  try { timing = computeTiming(); } catch (e) { $("timingSummary").innerHTML = `<span class="warn">${e.message}</span>`; }
+
+  if (timing) {
+    const short = timing.durations.filter((d) => d < CONCAT_TIMEBASE_MS).length;
+    $("timingSummary").innerHTML =
+      `beat <b>${timing.msPerBeat.toFixed(1)}ms</b> · loop <b>${beats.length}</b> beats, ` +
+      `<b>${(timing.loopMs / 1000).toFixed(2)}s</b> · shortest frame ` +
+      `<b>${Math.min(...timing.durations).toFixed(1)}ms</b>` +
+      (short ? `<br><span class="warn">${short} frame${short > 1 ? "s" : ""} under ` +
+        `${CONCAT_TIMEBASE_MS}ms — exact here, rounded by the sync.py path.</span>` : "");
+  }
+
+  const canRender = !!timing && ready.audio;
+  $("secPreview").toggleAttribute("data-off", !canRender);
+  $("secRender").toggleAttribute("data-off", !canRender);
+  return timing;
+}
+
+/* ------------------------------------------------------------------ preview */
+
+
+$("previewBtn").onclick = () => {
+  if (preview) return stopPreview();
+
+  const timing = computeTiming();
+  if (!timing) return;
+
+  actx.resume();
+  const src = actx.createBufferSource();
+  src.buffer = state.audioBuffer;
+  src.connect(actx.destination);
+
+  const t0 = actx.currentTime + 0.08;
+  src.start(t0, state.downbeat);
+  if ($("clickTrack").checked) {
+    scheduleClicks(t0, Math.min(30, state.audioBuffer.duration - state.downbeat));
+  }
+
+  // Cumulative onset of each frame within one loop, so a time maps to a frame by search
+  const onsets = [0];
+  for (const d of timing.durations) onsets.push(onsets[onsets.length - 1] + d);
+
+  const ctx = $("previewCanvas").getContext("2d");
+  let raf = 0;
+
+  const tick = () => {
+    const ms = (actx.currentTime - t0) * 1000;
+    if (ms >= 0) {
+      const inLoop = ms % timing.loopMs;
+      let i = onsets.findIndex((o) => o > inLoop) - 1;
+      if (i < 0) i = timing.durations.length - 1;
+      ctx.clearRect(0, 0, state.width, state.height);
+      ctx.drawImage(state.frames[timing.order[i]], 0, 0);
+      $("previewPos").textContent =
+        `${(ms / 1000).toFixed(2)}s · beat ${Math.floor(ms / timing.msPerBeat) + 1} · frame ${timing.order[i]}`;
+    }
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+
+  src.onended = () => stopPreview();
+  preview = { src, cancel: () => cancelAnimationFrame(raf) };
+  $("previewBtn").textContent = "Stop preview";
+};
+
+function stopPreview() {
+  if (!preview) return;
+  preview.cancel();
+  try { preview.src.stop(); } catch {}
+  preview = null;
+  $("previewBtn").textContent = "Play preview";
+}
+
+/* --------------------------------------------------------------------- misc */
+
+function log(line) {
+  $("log").textContent += line + "\n";
+  $("log").scrollTop = $("log").scrollHeight;
+}
+
+function fail(err) {
+  console.error(err);
+  log(`ERROR ${err.message}`);
+  alert(err.message);
+}
+
+/* --------------------------------------------------------------------- mp4 */
+// A small MP4 writer. The point of writing one rather than pulling a library in is that
+// the page stays a single file that works straight off the filesystem, and that the video
+// track carries a per-sample duration, so the retimed frames keep exact microsecond
+// timing instead of the 40ms grid the ffmpeg path is stuck with.
+
+const MOVIE_TIMESCALE = 1000;
+const VIDEO_TIMESCALE = 1000000;
+const MATRIX = [0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000];
+
+const bytes = (...v) => new Uint8Array(v);
+const u16 = (n) => bytes((n >>> 8) & 255, n & 255);
+const u24 = (n) => bytes((n >>> 16) & 255, (n >>> 8) & 255, n & 255);
+const u32 = (n) => bytes((n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255);
+const ascii = (s) => new Uint8Array([...s].map((c) => c.charCodeAt(0)));
+
+function cat(parts) {
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let at = 0;
+  for (const p of parts) { out.set(p, at); at += p.length; }
+  return out;
+}
+
+const box = (type, ...parts) => {
+  const payload = cat(parts);
+  return cat([u32(payload.length + 8), ascii(type), payload]);
+};
+const fullBox = (type, version, flags, ...parts) => box(type, bytes(version), u24(flags), ...parts);
+
+// One stts entry per run of equal deltas, which is what makes variable frame timing cheap
+function sttsBox(deltas) {
+  const runs = [];
+  for (const d of deltas) {
+    const last = runs[runs.length - 1];
+    if (last && last[1] === d) last[0]++;
+    else runs.push([1, d]);
+  }
+  return fullBox("stts", 0, 0, u32(runs.length), ...runs.map(([count, delta]) => cat([u32(count), u32(delta)])));
+}
+
+function descriptor(tag, payload) {
+  if (payload.length > 127) throw new Error(`Descriptor ${tag} too long to write.`);
+  return cat([bytes(tag, payload.length), payload]);
+}
+
+function trakBox(t) {
+  const stbl = box("stbl",
+    fullBox("stsd", 0, 0, u32(1), t.sampleEntry),
+    sttsBox(t.deltas),
+    ...(t.syncSamples ? [fullBox("stss", 0, 0, u32(t.syncSamples.length), ...t.syncSamples.map(u32))] : []),
+    fullBox("stsc", 0, 0, u32(1), cat([u32(1), u32(t.sizes.length), u32(1)])),
+    fullBox("stsz", 0, 0, u32(0), u32(t.sizes.length), ...t.sizes.map(u32)),
+    fullBox("stco", 0, 0, u32(1), u32(t.chunkOffset)),
+  );
+
+  const tkhd = fullBox("tkhd", 0, 3,
+    u32(0), u32(0), u32(t.id), u32(0), u32(t.movieDuration),
+    u32(0), u32(0), u16(0), u16(0), u16(t.isVideo ? 0 : 0x0100), u16(0),
+    ...MATRIX.map(u32),
+    u32((t.isVideo ? t.width : 0) * 65536), u32((t.isVideo ? t.height : 0) * 65536),
+  );
+
+  const mdia = box("mdia",
+    fullBox("mdhd", 0, 0, u32(0), u32(0), u32(t.timescale), u32(t.mediaDuration), u16(0x55c4), u16(0)),
+    fullBox("hdlr", 0, 0, u32(0), ascii(t.isVideo ? "vide" : "soun"), u32(0), u32(0), u32(0),
+      ascii(t.isVideo ? "VideoHandler" : "SoundHandler"), bytes(0)),
+    box("minf",
+      t.isVideo ? fullBox("vmhd", 0, 1, u16(0), u16(0), u16(0), u16(0)) : fullBox("smhd", 0, 0, u16(0), u16(0)),
+      box("dinf", fullBox("dref", 0, 0, u32(1), fullBox("url ", 0, 1))),
+      stbl,
+    ),
+  );
+
+  const edts = t.priming
+    ? [box("edts", fullBox("elst", 0, 0, u32(1),
+        u32(Math.round(((t.mediaDuration - t.priming) / t.timescale) * MOVIE_TIMESCALE)),
+        u32(t.priming), u16(1), u16(0)))]
+    : [];
+
+  return box("trak", tkhd, ...edts, mdia);
+}
+
+function avc1Entry(width, height, avcC) {
+  return box("avc1",
+    bytes(0, 0, 0, 0, 0, 0), u16(1),
+    u16(0), u16(0), u32(0), u32(0), u32(0),
+    u16(width), u16(height),
+    u32(0x00480000), u32(0x00480000), u32(0),
+    u16(1), new Uint8Array(32),
+    u16(0x0018), u16(0xffff),
+    box("avcC", avcC),
+  );
+}
+
+function mp4aEntry(channels, sampleRate, audioSpecificConfig) {
+  const esds = fullBox("esds", 0, 0, descriptor(0x03, cat([
+    u16(1), bytes(0),
+    descriptor(0x04, cat([
+      bytes(0x40, 0x15), u24(0), u32(0), u32(0),
+      descriptor(0x05, audioSpecificConfig),
+    ])),
+    descriptor(0x06, bytes(0x02)),
+  ])));
+
+  return box("mp4a",
+    bytes(0, 0, 0, 0, 0, 0), u16(1),
+    u32(0), u32(0),
+    u16(channels), u16(16), u16(0), u16(0),
+    u32(sampleRate * 65536),
+    esds,
+  );
+}
+
+function buildMp4(video, audio) {
+  const videoBytes = video.samples.reduce((n, s) => n + s.data.length, 0);
+  const audioBytes = audio.samples.reduce((n, s) => n + s.data.length, 0);
+
+  const ftyp = box("ftyp", ascii("isom"), u32(0x200), ascii("isom"), ascii("iso2"), ascii("avc1"), ascii("mp41"));
+  const mdatStart = ftyp.length;
+
+  const videoMs = Math.round((video.durationTs / VIDEO_TIMESCALE) * MOVIE_TIMESCALE);
+  const audioMs = Math.round((audio.durationTs / audio.sampleRate) * MOVIE_TIMESCALE);
+
+  const mvhd = fullBox("mvhd", 0, 0,
+    u32(0), u32(0), u32(MOVIE_TIMESCALE), u32(Math.max(videoMs, audioMs)),
+    u32(0x00010000), u16(0x0100), u16(0), u32(0), u32(0),
+    ...MATRIX.map(u32), ...Array(6).fill(u32(0)), u32(3),
+  );
+
+  const moov = box("moov", mvhd,
+    trakBox({
+      id: 1, isVideo: true, timescale: VIDEO_TIMESCALE,
+      mediaDuration: video.durationTs, movieDuration: videoMs,
+      width: video.width, height: video.height,
+      sampleEntry: avc1Entry(video.width, video.height, video.description),
+      deltas: video.samples.map((s) => s.durationTs),
+      sizes: video.samples.map((s) => s.data.length),
+      syncSamples: video.samples.map((s, i) => (s.isKey ? i + 1 : 0)).filter(Boolean),
+      chunkOffset: mdatStart + 8,
+    }),
+    trakBox({
+      id: 2, isVideo: false, timescale: audio.sampleRate,
+      mediaDuration: audio.durationTs, movieDuration: audioMs,
+      sampleEntry: mp4aEntry(audio.channels, audio.sampleRate, audio.description),
+      priming: audio.priming,
+      deltas: audio.samples.map((s) => s.durationTs),
+      sizes: audio.samples.map((s) => s.data.length),
+      chunkOffset: mdatStart + 8 + videoBytes,
+    }),
+  );
+
+  return new Blob([
+    ftyp,
+    u32(8 + videoBytes + audioBytes), ascii("mdat"),
+    ...video.samples.map((s) => s.data),
+    ...audio.samples.map((s) => s.data),
+    moov,
+  ], { type: "video/mp4" });
+}
+
+/* ----------------------------------------------------------------- encoding */
+
+// Which frame of the gif to show at which microsecond, repeated until the song runs out
+function buildSchedule(timing, seconds) {
+  const totalMs = seconds * 1000;
+  const schedule = [];
+  let cumMs = 0;
+
+  while (cumMs < totalMs) {
+    for (let i = 0; i < timing.order.length && cumMs < totalMs; i++) {
+      // Timestamps come from the running total rather than the rounded frame durations,
+      // so rounding cannot accumulate and walk the beats off the grid
+      schedule.push({ frame: timing.order[i], tsUs: Math.round(cumMs * 1000) });
+      cumMs += timing.durations[i];
+    }
+  }
+
+  const endUs = Math.round(Math.min(cumMs, totalMs) * 1000);
+  return schedule.map((s, i) => ({
+    ...s,
+    durationUs: (i + 1 < schedule.length ? schedule[i + 1].tsUs : endUs) - s.tsUs,
+  })).filter((s) => s.durationUs > 0);
+}
+
+async function pickVideoCodec(width, height) {
+  for (const codec of ["avc1.42002a", "avc1.4d0034", "avc1.640034"]) {
+    const { supported } = await VideoEncoder.isConfigSupported({
+      codec, width, height, bitrate: 4e6, framerate: 30, avc: { format: "avc" },
+    });
+    if (supported) return codec;
+  }
+  throw new Error("No supported H.264 encoder configuration in this browser.");
+}
+
+async function encodeVideo(schedule, width, height) {
+  const samples = [];
+  let description = null;
+
+  const encoder = new VideoEncoder({
+    output: (chunk, meta) => {
+      if (meta?.decoderConfig?.description && !description) {
+        description = new Uint8Array(meta.decoderConfig.description);
+      }
+      const data = new Uint8Array(chunk.byteLength);
+      chunk.copyTo(data);
+      samples.push({ data, tsUs: chunk.timestamp, isKey: chunk.type === "key" });
+    },
+    error: (e) => { throw e; },
+  });
+
+  encoder.configure({
+    codec: await pickVideoCodec(width, height),
+    width, height, bitrate: 4e6, framerate: 30, avc: { format: "avc" },
+  });
+
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext("2d");
+  let lastKeyUs = -Infinity;
+
+  for (let i = 0; i < schedule.length; i++) {
+    const { frame, tsUs, durationUs } = schedule[i];
+
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(state.frames[frame], 0, 0);
+
+    const keyFrame = tsUs - lastKeyUs >= 2e6;
+    if (keyFrame) lastKeyUs = tsUs;
+
+    const videoFrame = new VideoFrame(canvas, { timestamp: tsUs, duration: durationUs });
+    encoder.encode(videoFrame, { keyFrame });
+    videoFrame.close();
+
+    if (encoder.encodeQueueSize > 24) {
+      await new Promise((r) => { encoder.ondequeue = r; });
+    }
+    if (i % 200 === 0) log(`  video ${i}/${schedule.length} frames`);
+  }
+
+  await encoder.flush();
+  encoder.close();
+
+  if (!description) throw new Error("The encoder produced no avcC description.");
+
+  // Encoders may reorder output, and the muxer needs the samples in decode order
+  samples.sort((a, b) => a.tsUs - b.tsUs);
+  const endUs = schedule[schedule.length - 1].tsUs + schedule[schedule.length - 1].durationUs;
+
+  return {
+    width, height, description, durationTs: endUs,
+    samples: samples.map((s, i) => ({
+      data: s.data, isKey: s.isKey,
+      durationTs: (i + 1 < samples.length ? samples[i + 1].tsUs : endUs) - s.tsUs,
+    })),
+  };
+}
+
+// An AAC encoder emits a couple of thousand samples of priming before the real audio
+// starts. How many depends on the platform's encoder, so measure it by round-tripping a
+// noise burst rather than assuming. Left uncorrected it drags the music tens of
+// milliseconds behind the animation, which on a 500ms beat is plainly audible.
+async function measureEncoderDelay(sampleRate, channels) {
+  const LENGTH = 8192, SEARCH = 8192;
+
+  const probe = new Float32Array(LENGTH);
+  let seed = 1;
+  for (let i = 0; i < LENGTH; i++) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    probe[i] = seed / 0x40000000 - 1;
+  }
+
+  const config = { codec: "mp4a.40.2", sampleRate, numberOfChannels: channels, bitrate: 160000 };
+  const chunks = [];
+  let description = null;
+
+  const encoder = new AudioEncoder({
+    output: (chunk, meta) => {
+      if (meta?.decoderConfig?.description && !description) {
+        description = new Uint8Array(meta.decoderConfig.description);
+      }
+      chunks.push(chunk);
+    },
+    error: (e) => { throw e; },
+  });
+  encoder.configure(config);
+
+  for (let off = 0; off < LENGTH + SEARCH; off += 1024) {
+    const planar = new Float32Array(1024 * channels);
+    for (let c = 0; c < channels; c++) {
+      for (let i = 0; i < 1024 && off + i < LENGTH; i++) planar[c * 1024 + i] = probe[off + i];
+    }
+    encoder.encode(new AudioData({
+      format: "f32-planar", sampleRate, numberOfFrames: 1024, numberOfChannels: channels,
+      timestamp: Math.round((off / sampleRate) * 1e6), data: planar,
+    }));
+  }
+  await encoder.flush();
+  encoder.close();
+
+  const decoded = [];
+  const decoder = new AudioDecoder({
+    output: (data) => {
+      const plane = new Float32Array(data.numberOfFrames);
+      data.copyTo(plane, { planeIndex: 0, format: "f32-planar" });
+      decoded.push(plane);
+      data.close();
+    },
+    error: (e) => { throw e; },
+  });
+  decoder.configure({ ...config, description });
+  for (const chunk of chunks) decoder.decode(chunk);
+  await decoder.flush();
+  decoder.close();
+
+  const flat = new Float32Array(decoded.reduce((n, p) => n + p.length, 0));
+  decoded.reduce((at, p) => (flat.set(p, at), at + p.length), 0);
+
+  // The lag that lines the decoded burst back up with the probe is the priming length
+  let best = 0, bestScore = -Infinity;
+  for (let lag = 0; lag + LENGTH <= flat.length && lag < SEARCH; lag++) {
+    let score = 0;
+    for (let i = 0; i < LENGTH; i += 4) score += probe[i] * flat[lag + i];
+    if (score > bestScore) { bestScore = score; best = lag; }
+  }
+  return best;
+}
+
+async function encodeAudio(seconds) {
+  const buffer = state.audioBuffer;
+  const sampleRate = buffer.sampleRate;
+  const channels = Math.min(2, buffer.numberOfChannels);
+  const start = Math.round(state.downbeat * sampleRate);
+  const total = Math.min(buffer.length - start, Math.round(seconds * sampleRate));
+
+  const samples = [];
+  let description = null;
+
+  const encoder = new AudioEncoder({
+    output: (chunk, meta) => {
+      if (meta?.decoderConfig?.description && !description) {
+        description = new Uint8Array(meta.decoderConfig.description);
+      }
+      const data = new Uint8Array(chunk.byteLength);
+      chunk.copyTo(data);
+      samples.push({ data, durationTs: Math.round((chunk.duration / 1e6) * sampleRate) || 1024 });
+    },
+    error: (e) => { throw e; },
+  });
+
+  encoder.configure({ codec: "mp4a.40.2", sampleRate, numberOfChannels: channels, bitrate: 160000 });
+
+  const BLOCK = 1024;
+  for (let off = 0; off < total; off += BLOCK) {
+    const n = Math.min(BLOCK, total - off);
+    const planar = new Float32Array(n * channels);
+    for (let c = 0; c < channels; c++) {
+      planar.set(buffer.getChannelData(c).subarray(start + off, start + off + n), c * n);
+    }
+    encoder.encode(new AudioData({
+      format: "f32-planar", sampleRate, numberOfFrames: n, numberOfChannels: channels,
+      timestamp: Math.round((off / sampleRate) * 1e6), data: planar,
+    }));
+    if (encoder.encodeQueueSize > 24) await new Promise((r) => { encoder.ondequeue = r; });
+  }
+
+  await encoder.flush();
+  encoder.close();
+
+  if (!description) throw new Error("The encoder produced no AudioSpecificConfig.");
+
+  return {
+    sampleRate, channels, description, samples,
+    priming: await measureEncoderDelay(sampleRate, channels),
+    durationTs: samples.reduce((n, s) => n + s.durationTs, 0),
+  };
+}
+
+function offerDownload(blob, filename) {
+  const link = $("download");
+  if (link.href) URL.revokeObjectURL(link.href);
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.textContent = `Download ${filename} (${(blob.size / 1e6).toFixed(1)}MB)`;
+  link.hidden = false;
+}
+
+function outputName() {
+  const stem = (f) => f.name.replace(/\.[^.]+$/, "");
+  return `${stem(state.audioFile)}_${stem(state.gifFile)}.mp4`;
+}
+
+$("renderBrowserBtn").onclick = async () => {
+  const button = $("renderBrowserBtn");
+  const timing = computeTiming();
+  if (!timing) return;
+
+  button.disabled = true;
+  $("log").textContent = "";
+  $("download").hidden = true;
+
+  try {
+    const seconds = state.audioBuffer.duration - state.downbeat;
+    // H.264 needs even dimensions; an odd gif gets one transparent row or column
+    const width = state.width + (state.width % 2);
+    const height = state.height + (state.height % 2);
+
+    const schedule = buildSchedule(timing, seconds);
+    log(`Rendering ${schedule.length} frames over ${seconds.toFixed(2)}s at ${width}×${height}`);
+
+    const video = await encodeVideo(schedule, width, height);
+    log(`  video done, ${video.samples.length} samples`);
+
+    const audio = await encodeAudio(seconds);
+    log(`  audio done, ${audio.samples.length} samples, ${audio.priming} samples of encoder priming skipped`);
+
+    offerDownload(buildMp4(video, audio), outputName());
+    log("Done.");
+  } catch (err) {
+    fail(err);
+  } finally {
+    button.disabled = false;
+  }
+};
+
+/* ------------------------------------------------------------ sync.py mode */
+
+async function toBase64(file) {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  for (let i = 0; i < buf.length; i += 0x8000) {
+    binary += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
+
+$("renderPythonBtn").onclick = async () => {
+  const button = $("renderPythonBtn");
+  const timing = computeTiming();
+  if (!timing) return;
+
+  button.disabled = true;
+  $("log").textContent = "";
+  $("download").hidden = true;
+
+  try {
+    log("Uploading…");
+    const response = await fetch("api/render", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        gif_name: state.gifFile.name, gif_b64: await toBase64(state.gifFile),
+        audio_name: state.audioFile.name, audio_b64: await toBase64(state.audioFile),
+        beat_frames: timing.beats,
+        bpm: parseFloat($("bpm").value),
+        tempo_multiplier: parseFloat($("multiplier").value),
+        interpolation: $("interpolation").value,
+        downbeat: state.downbeat,
+      }),
+    });
+
+    if (!response.ok) throw new Error(`Server returned ${response.status}: ${await response.text()}`);
+
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    let tail = "", result = null;
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      tail += value;
+      const lines = tail.split("\n");
+      tail = lines.pop();
+      for (const line of lines) {
+        if (line.startsWith("RESULT ")) result = line.slice(7).trim();
+        else if (line) log(line);
+      }
+    }
+
+    if (!result) throw new Error("The server finished without producing a file.");
+
+    const mp4 = await fetch(`api/result?name=${encodeURIComponent(result)}`);
+    if (!mp4.ok) throw new Error(`Could not fetch the result: ${mp4.status}`);
+    offerDownload(await mp4.blob(), result);
+    log("Done.");
+  } catch (err) {
+    fail(err);
+  } finally {
+    button.disabled = false;
+  }
+};
+
+(location.protocol === "file:"
+  ? Promise.resolve(null)
+  : fetch("api/health").then((r) => (r.ok ? r.json() : null)).catch(() => null)
+).then((health) => {
+    if (health?.ok) {
+      $("renderPythonBtn").hidden = false;
+      $("estimateBtn").hidden = !health.essentia;
+      $("mode").textContent = "served by marker.py — sync.py available";
+      $("renderNote").textContent = health.ffmpeg ? "" : "ffmpeg not found on PATH";
+    } else {
+      $("mode").textContent = "browser only — run marker.py to render with sync.py";
+    }
+});
+
+addEventListener("resize", () => { if (state.audioBuffer) drawWave(); });
+refresh();
+</script>
+</body>
+</html>
