@@ -2754,6 +2754,7 @@ $("renderBrowserBtn").onclick = async () => {
   const timing = computeTiming();
   if (!timing) return;
 
+  stopPlayback();
   button.disabled = true;
   clearError();
   clearRender();
