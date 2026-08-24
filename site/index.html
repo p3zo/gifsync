@@ -337,7 +337,7 @@ details.more .row { margin-top: .6rem; }
       <div class="row">
         <button id="prevBtn">&#9664;</button>
         <button id="nextBtn">&#9654;</button>
-        <button id="markBtn" class="primary">Mark this frame (space)</button>
+        <button id="markBtn" class="primary">Mark this frame (M)</button>
         <span class="say" id="framePos"></span>
       </div>
       <div class="row">
@@ -392,7 +392,7 @@ details.more .row { margin-top: .6rem; }
     </div>
     <div class="stagecontrols">
       <div class="row">
-        <button id="previewBtn" class="primary">Play preview</button>
+        <button id="previewBtn" class="primary">Play preview (space)</button>
         <span class="say" id="previewPos"></span>
       </div>
       <div class="row">
@@ -847,7 +847,7 @@ function paintFrame(ctx, frame, width, height) {
 function showCurrentFrame() {
   const ready = state.frames.length > 0;
   $("framePos").innerHTML = ready ? `Frame <b>${state.cur + 1}</b> of ${state.frames.length}` : "";
-  $("markBtn").textContent = state.beats.has(state.cur) ? "Unmark this frame (space)" : "Mark this frame (space)";
+  $("markBtn").textContent = state.beats.has(state.cur) ? "Unmark this frame (M)" : "Mark this frame (M)";
 
   [...$("strip").children].forEach((c, i) => {
     c.classList.toggle("cur", i === state.cur);
@@ -941,7 +941,11 @@ addEventListener("keydown", (e) => {
   if (e.target.matches("input, select, textarea")) return;
   if (e.key === "ArrowLeft") { step(-1); e.preventDefault(); }
   else if (e.key === "ArrowRight") { step(1); e.preventDefault(); }
-  else if (e.key === " ") { toggleMark(); e.preventDefault(); }
+  else if (e.key === " ") {
+    if (state.audioBuffer) playback ? stopPlayback() : startPlayback();
+    e.preventDefault();
+  }
+  else if (e.key === "m" || e.key === "M") { toggleMark(); e.preventDefault(); }
   else if (e.key === "b" || e.key === "B") { tapBeat(); e.preventDefault(); }
 });
 
@@ -1658,7 +1662,7 @@ function tickPlayback() {
 }
 
 function syncTransport() {
-  $("previewBtn").textContent = playback ? "Stop" : "Play preview";
+  $("previewBtn").textContent = playback ? "Stop (space)" : "Play preview (space)";
   $("tapBeatBtn").disabled = !playback;
   // a disabled button swallows its own hover, so the reason hangs off the wrapper
   $("tapBeatWrap").title = playback
