@@ -415,6 +415,7 @@ details.more .row { margin-top: .6rem; }
         <summary>More controls</summary>
         <div class="row">
           <button id="tapBtn">Tap the tempo</button>
+          <button id="tapUseBtn" class="primary" hidden></button>
           <span id="tapBeatWrap"><button id="tapBeatBtn">Tap a beat (B)</button></span>
           <button id="undoBeatBtn">Undo</button>
           <button id="clearBeatsBtn">Clear all beats</button>
@@ -1739,18 +1740,33 @@ function retimeClicks() {
 
 /* --------------------------------------------------------------------- tempo */
 
-let taps = [];
+// The taps read out on their own button rather than into the tempo box: every tap would
+// otherwise move the number being tapped against, so it could never settle. Accepting the
+// readout is what changes the tempo.
+let taps = [], tappedBpm = null;
+
 $("tapBtn").onclick = () => {
   const now = performance.now();
   if (taps.length && now - taps[taps.length - 1] > 2000) taps = [];
   taps.push(now);
   if (taps.length > 1) {
-    userSetTempo = true;
     const span = taps[taps.length - 1] - taps[0];
-    $("bpm").value = (60000 / (span / (taps.length - 1))).toFixed(1);
-    refresh();
+    tappedBpm = 60000 / (span / (taps.length - 1));
+    $("tapUseBtn").hidden = false;
+    $("tapUseBtn").textContent = `Use ${tappedBpm.toFixed(1)} BPM`;
   }
   $("tapBtn").textContent = taps.length > 1 ? `Tap the tempo (${taps.length})` : "Tap the tempo";
+};
+
+$("tapUseBtn").onclick = () => {
+  if (tappedBpm === null) return;
+  userSetTempo = true;
+  $("bpm").value = tappedBpm.toFixed(1);
+  taps = [];
+  tappedBpm = null;
+  $("tapUseBtn").hidden = true;
+  $("tapBtn").textContent = "Tap the tempo";
+  refresh();
 };
 
 /* ------------------------------------------------------------ tempo estimate */
