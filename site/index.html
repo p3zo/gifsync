@@ -1380,17 +1380,24 @@ function drawWave(playheadSeconds = null) {
   if (currentTiming) {
     const step = currentTiming.msPerBeat / 1000;
     const spacing = (step / span) * w;
-    // narrow the triangles as they crowd, or a fast setting smears them into one band
+    // narrow the triangles as they crowd, or a fast setting smears them into one band —
+    // and once they would touch anyway, leave them out: over a whole song they read as a
+    // solid fringe saying nothing. The loop marks come every few beats, so they stay
+    // legible well after the per-beat ones have gone; each kind goes by its own spacing.
     const half = Math.max(1.5, Math.min(5, spacing / 2.5));
+    const showGrid = spacing >= 6;
+    const showLoop = spacing * currentTiming.beats.length >= 6;
     const grid = new Path2D(), loop = new Path2D();
 
-    for (let k = 0; ; k++) {
+    for (let k = 0; showGrid || showLoop; k++) {
       const t = region.start + k * step;
       if (t >= region.end) break;
       // k keeps counting through the offscreen ones, or the loop marks would shift
       if (t < win.start - step || t > win.end + step) continue;
+      const isLoop = k % currentTiming.beats.length === 0;
+      if (isLoop ? !showLoop : !showGrid) continue;
       const x = at(t);
-      if (k % currentTiming.beats.length === 0) {
+      if (isLoop) {
         loop.moveTo(x - half, 0);
         loop.lineTo(x + half, 0);
         loop.lineTo(x, 9);
@@ -1399,7 +1406,7 @@ function drawWave(playheadSeconds = null) {
         grid.lineTo(x + half, h);
         grid.lineTo(x, h - 9);
       }
-      (k % currentTiming.beats.length === 0 ? loop : grid).closePath();
+      (isLoop ? loop : grid).closePath();
     }
 
     ctx.fillStyle = css.getPropertyValue("--grid");
@@ -1478,12 +1485,16 @@ function drawWave(playheadSeconds = null) {
   }
 
   if (playheadSeconds !== null) {
-    ctx.strokeStyle = css.getPropertyValue("--ink");
-    ctx.lineWidth = 1;
+    const x = at(playheadSeconds);
+    ctx.fillStyle = css.getPropertyValue("--ink");
+    ctx.fillRect(x - 1, 0, 2, h);
+    // a cap, so it reads even where the beat lines crowd
     ctx.beginPath();
-    ctx.moveTo(at(playheadSeconds), 0);
-    ctx.lineTo(at(playheadSeconds), h);
-    ctx.stroke();
+    ctx.moveTo(x - 5, 0);
+    ctx.lineTo(x + 5, 0);
+    ctx.lineTo(x, 7);
+    ctx.closePath();
+    ctx.fill();
   }
 }
 
