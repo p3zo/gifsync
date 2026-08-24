@@ -1170,7 +1170,7 @@ async function loadAudio(file) {
   beatsAreEstimates = false;
   state.peaks = null;
   state.clip = null;
-  view = null;
+  clearView();
   songHistory.length = 0;
   songToken++;
   userSetTempo = false;
@@ -1270,9 +1270,17 @@ function viewWindow() {
 function setView(start, span) {
   const duration = state.audioBuffer.duration;
   const width = Math.max(MIN_VIEW, Math.min(duration, span));
-  if (width >= duration) { view = null; return; }
-  const from = Math.max(0, Math.min(duration - width, start));
-  view = { start: from, end: from + width };
+  if (width >= duration) view = null;
+  else {
+    const from = Math.max(0, Math.min(duration - width, start));
+    view = { start: from, end: from + width };
+  }
+  $("zoomOutBtn").hidden = !view;
+}
+
+function clearView() {
+  view = null;
+  $("zoomOutBtn").hidden = true;
 }
 
 function redrawWave() {
@@ -1617,12 +1625,12 @@ $("wholeSongBtn").onclick = () => {
   rememberSong();
   state.clip = null;
   // the zoom was for placing edges that no longer exist
-  view = null;
+  clearView();
   refresh();
 };
 
 $("zoomOutBtn").onclick = () => {
-  view = null;
+  clearView();
   refresh();
 };
 
