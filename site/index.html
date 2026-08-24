@@ -135,6 +135,8 @@ section.is-current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--ac
 }
 .empty[hidden] { display: none; }
 .row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+/* flex outranks the browser's own [hidden] rule, same as .empty above */
+.row[hidden] { display: none; }
 .row + .row { margin-top: .75rem; }
 button {
   font: inherit; font-size: .875rem; padding: .35rem .7rem; border-radius: 6px;
@@ -400,6 +402,11 @@ details.more .row { margin-top: .6rem; }
         <button id="halfBtn" title="Halve the tempo">&divide;2</button>
         <button id="doubleBtn" title="Double the tempo">&times;2</button>
       </div>
+      <div class="row" id="startFrameRow" hidden>
+        <label>The song's first beat lands on
+          <select id="startFrame"></select>
+        </label>
+      </div>
       <div class="row">
         <label>The GIF hits
           <select id="hits">
@@ -595,7 +602,8 @@ function remember(history, snapshot) {
 }
 
 const state = {
-  gifFile: null, frames: [], holds: [], width: 0, height: 0, cur: 0, beats: new Set(), credit: null,
+  gifFile: null, frames: [], holds: [], width: 0, height: 0, cur: 0, beats: new Set(),
+  startFrame: null, credit: null,
   audioFile: null, audioBuffer: null, audioBeats: [], peaks: null, clip: null,
 };
 
@@ -676,6 +684,7 @@ async function loadGif(file) {
   state.height = frames[0].height;
   state.cur = 0;
   state.beats = new Set();
+  state.startFrame = null;
   state.credit = null;
   markHistory.length = 0;
 
@@ -2196,6 +2205,11 @@ function getMsPerBeat() {
 
 $("bpm").oninput = () => { userSetTempo = true; refresh(); };
 
+$("startFrame").onchange = () => {
+  state.startFrame = parseInt($("startFrame").value, 10);
+  refresh();
+};
+
 // The tempo model names half or twice the real tempo often enough to be worth one button
 // each: which of the three it is takes one listen to tell, and no listening at all to fix.
 for (const [id, factor] of [["halfBtn", 0.5], ["doubleBtn", 2]]) {
@@ -2221,7 +2235,15 @@ function computeTiming() {
   const msPerBeat = getMsPerBeat();
   if (!beats.length || !msPerBeat || !state.frames.length) return null;
 
-  const durations = getDurations(beats, msPerBeat, state.frames.length, $("interpolation").value);
+  const raw = getDurations(beats, msPerBeat, state.frames.length, $("interpolation").value);
+
+  // Which marked frame takes the song's first beat. The loop can start on any of them;
+  // the durations come out aligned to the earliest mark, so starting elsewhere means
+  // rotating them by the frames skipped over. A choice whose frame is no longer marked
+  // reads as the earliest mark, and the picker shows that.
+  const startIx = Math.max(0, beats.indexOf(state.startFrame));
+  const shift = beats[startIx] - beats[0];
+  const durations = shift ? [...raw.slice(shift), ...raw.slice(0, shift)] : raw;
 
   // Cumulative onset of each frame within one loop, so a time maps to a frame by search
   const onsets = [0];
@@ -2229,7 +2251,7 @@ function computeTiming() {
 
   return {
     beats, msPerBeat, durations, onsets,
-    order: getFrameOrder(beats[0], state.frames.length),
+    order: getFrameOrder(beats[startIx], state.frames.length),
     loopMs: beats.length * msPerBeat,
   };
 }
@@ -2260,6 +2282,14 @@ function refresh() {
   $("beatList").innerHTML = beats.length
     ? `<b>${beats.length}</b> frame${beats.length > 1 ? "s" : ""} marked: the beat lands on each of them in turn.`
     : "No frames marked yet. Step through the GIF and mark the ones the beat should land on.";
+
+  // With one mark there is nothing to choose; with more, any of them can take the downbeat
+  $("startFrameRow").hidden = beats.length < 2;
+  if (beats.length >= 2) {
+    const picker = $("startFrame");
+    picker.replaceChildren(...beats.map((f) => new Option(`frame ${f + 1}`, f)));
+    picker.value = beats[Math.max(0, beats.indexOf(state.startFrame))];
+  }
 
   currentTiming = null;
   let problem = "";
