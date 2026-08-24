@@ -446,7 +446,10 @@ details.more .row { margin-top: .6rem; }
     <div class="row legend">
       <span><svg class="glyph g-mark" viewBox="0 0 12 18" aria-hidden="true">
         <line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="2"/></svg>
-        beats in the song</span>
+        beats you marked</span>
+      <span><svg class="glyph g-mark" viewBox="0 0 12 18" aria-hidden="true">
+        <line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="1" opacity=".3"/></svg>
+        every beat at this tempo</span>
       <span><svg class="glyph g-grid" viewBox="0 0 12 18" aria-hidden="true">
         <polygon points="1,18 11,18 6,9" fill="currentColor"/></svg>
         where the gif's beat frames land</span>
@@ -1187,9 +1190,9 @@ async function loadAudio(file) {
   if (SERVED) estimateSong({ keepExistingBeats: true });
 }
 
-// Whether the marks on the waveform were placed by the estimate or by a person. Four marks
-// bunched at the head of a long song look like something went wrong; they are the estimate
-// showing its working, and the summary has to say so.
+// Whether the mark on the waveform was placed by the estimate or by a person. A single
+// mark at the head of a long song looks like something went wrong; it is the estimate
+// naming the downbeat, and the summary has to say so.
 let beatsAreEstimates = false;
 
 // The tempo is read off the beats, and the trimmed part of the song is rounded onto the
@@ -2156,11 +2159,9 @@ async function estimateSong({ keepExistingBeats }) {
       const period = 60 / bpm;
       // the phase comes off the untiled slice, so a seam cannot pass for a downbeat
       const first = region.start + findFirstBeat(slice, bpm);
-      // Four marks: one would be enough to say where the animation starts, and four say
-      // plainly on the waveform how fast the machine thinks the song is going.
-      state.audioBeats = [0, 1, 2, 3]
-        .map((k) => first + k * period)
-        .filter((t) => t < region.end);
+      // One mark says where the video starts. The tempo the estimate heard needs no
+      // marks of its own: it is already drawn along the whole song as the faint grid.
+      state.audioBeats = first < region.end ? [first] : [];
       beatsAreEstimates = true;
     }
 
@@ -2283,8 +2284,8 @@ function refresh() {
       ? "Right-click the waveform where you hear a beat, or press B along to the music. " +
         `Click plays from that point. ${state.clip ? from : ""}`
       : beatsAreEstimates
-        ? `The estimate marked the first <b>${marks}</b> beats of ` +
-          `${state.clip ? "the part in use" : "the song"} to show the pace it heard. ${from}`
+        ? `The estimate marked the first beat of ${state.clip ? "the part in use" : "the song"}; ` +
+          `the faint lines are the rest of its beats at this tempo. ${from}`
         : `<b>${marks}</b> beat${marks > 1 ? "s" : ""} marked. ${from}`;
     $("wholeSongBtn").hidden = !state.clip;
     $("zoomOutBtn").hidden = !view;
