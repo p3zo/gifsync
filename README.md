@@ -9,7 +9,8 @@ alone, so the loop slides out of time with the song. This one changes the animat
 stores a duration per frame, so nothing has to be added or dropped to retime one. The frames just
 get held for different lengths. Mark the frames the beat should land on, mark the beats of the
 song, and the animation is stretched so the two line up. The output is an mp4 of the retimed
-animation with the audio muxed in, looped to the length of the audio.
+animation with the audio muxed in, looped to the length of the audio — or of just the part of the
+song selected on the waveform.
 
 The page itself explains how to use it, and also runs from
 [site/index.html](site/index.html) off disk. This file is about how it works.

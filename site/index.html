@@ -158,6 +158,7 @@ input[type=color] { width: 2.4rem; height: 1.7rem; padding: 1px; border: 1px sol
 .legend span { display: inline-flex; align-items: center; gap: .4rem; color: var(--dim); font-size: .8rem; }
 .glyph { width: 12px; height: 18px; flex: none; }
 .g-mark { color: var(--accent); } .g-grid { color: var(--grid); } .g-loop { color: var(--loop); }
+.g-edge { color: var(--ink); }
 .drop {
   border: 1.5px dashed var(--line); border-radius: 8px; padding: 1.75rem 1rem; text-align: center;
   color: var(--dim); cursor: pointer; font-size: .9rem;
@@ -203,7 +204,11 @@ input[type=color] { width: 2.4rem; height: 1.7rem; padding: 1px; border: 1px sol
 }
 #beatStrip figure.cur canvas { outline: 2px solid var(--ink); outline-offset: 1px; }
 #beatStrip figcaption { font-size: .7rem; color: var(--dim); margin-top: .25rem; }
-#wave { display: block; width: 100%; height: 110px; cursor: crosshair; border-radius: 6px; background: var(--bg); }
+/* pan-y so a finger can still scroll the page down the waveform, while a sideways drag
+   on one of the trim edges is ours to handle */
+#wave { display: block; width: 100%; height: 110px; cursor: crosshair; border-radius: 6px;
+  background: var(--bg); touch-action: pan-y; }
+#wave.grab { cursor: col-resize; }
 .mono { font-family: var(--mono); font-size: .8rem; color: var(--dim); }
 .say { font-size: .875rem; color: var(--dim); }
 .mono b, .say b { color: var(--ink); font-weight: 600; }
@@ -431,7 +436,10 @@ details.more .row { margin-top: .6rem; }
 
   <div id="audioBody" hidden>
     <canvas id="wave"></canvas>
-    <div class="row"><span class="say" id="audioSummary"></span></div>
+    <div class="row">
+      <span class="say" id="audioSummary"></span>
+      <button id="wholeSongBtn">Use the whole song</button>
+    </div>
     <div class="row legend">
       <span><svg class="glyph g-mark" viewBox="0 0 12 18" aria-hidden="true">
         <line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="2"/></svg>
@@ -442,6 +450,10 @@ details.more .row { margin-top: .6rem; }
       <span><svg class="glyph g-loop" viewBox="0 0 12 18" aria-hidden="true">
         <polygon points="1,0 11,0 6,9" fill="currentColor"/></svg>
         where the gif's loop restarts</span>
+      <span><svg class="glyph g-edge" viewBox="0 0 12 18" aria-hidden="true">
+        <line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="2"/>
+        <rect x="3" y="5" width="6" height="8" fill="currentColor"/></svg>
+        the part of the song used — drag to change</span>
     </div>
   </div>
 
@@ -468,8 +480,9 @@ details.more .row { margin-top: .6rem; }
     on.</li>
   <li><strong>Drop in a song.</strong> Gifsync estimates the tempo and marks the first few
     beats.</li>
-  <li><strong>Make adjustments.</strong> Move the marks, type the tempo, or tap it out. Set
-    how often the GIF hits, and what happens between beats.</li>
+  <li><strong>Make adjustments.</strong> Drag the edges of the waveform in to use one part
+    of the song. Move the marks, type the tempo, or tap it out. Set how often the GIF hits,
+    and what happens between beats.</li>
   <li><strong>Save the video.</strong></li>
 </ol>
 
@@ -572,7 +585,7 @@ export function getFrameOrder(firstBeatFrame, nFrames) {
 // own history of what it looked like before the last change; 50 deep is more than anyone
 // walks back, and the snapshots are a handful of numbers each.
 const UNDO_LIMIT = 50;
-const markHistory = [], beatHistory = [];
+const markHistory = [], songHistory = [];
 
 function remember(history, snapshot) {
   history.push(snapshot);
@@ -581,7 +594,7 @@ function remember(history, snapshot) {
 
 const state = {
   gifFile: null, frames: [], holds: [], width: 0, height: 0, cur: 0, beats: new Set(), credit: null,
-  audioFile: null, audioBuffer: null, audioBeats: [], peaks: null,
+  audioFile: null, audioBuffer: null, audioBeats: [], peaks: null, clip: null,
 };
 
 /* ---------------------------------------------------------------- capabilities */
@@ -1153,7 +1166,8 @@ async function loadAudio(file) {
   state.audioBeats = [];
   beatsAreEstimates = false;
   state.peaks = null;
-  beatHistory.length = 0;
+  state.clip = null;
+  songHistory.length = 0;
   songToken++;
   userSetTempo = false;
 
@@ -1174,16 +1188,58 @@ async function loadAudio(file) {
 // showing its working, and the summary has to say so.
 let beatsAreEstimates = false;
 
-// The tempo is read off the beats, so putting a beat back has to put the tempo back with it
-function rememberBeats() {
-  remember(beatHistory, {
+// The tempo is read off the beats, and the trimmed part of the song is rounded onto the
+// grid those beats set, so putting a beat back has to put both of those back with it
+function rememberSong() {
+  remember(songHistory, {
     beats: state.audioBeats.slice(), bpm: $("bpm").value, estimates: beatsAreEstimates,
+    clip: state.clip && { ...state.clip },
   });
 }
 
-// The first beat mark is the downbeat: the moment the animation starts from
+// The first beat mark is the downbeat: the phase of the song's own beat grid
 function downbeat() {
   return state.audioBeats.length ? state.audioBeats[0] : 0;
+}
+
+// The song's beat, as opposed to the rate the animation hits at
+function beatSeconds() {
+  const bpm = parseFloat($("bpm").value);
+  return bpm > 0 ? 60 / bpm : 0;
+}
+
+// m:ss.ss, because "1:34.50" places a moment in a song and "94.50s" does not
+function timeLabel(seconds) {
+  return `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(2).padStart(5, "0")}`;
+}
+
+// The part of the song the video is made from. state.clip is where the two edges were
+// dragged to; null is the whole song from the downbeat, which is where the video started
+// from before any of this existed.
+//
+// Both edges are rounded onto the song's beat grid. The animation's first beat frame lands
+// on the video's first sample, so a start off the beat puts every beat of the animation off
+// the beat with it, and an end off the beat makes the preview lurch every time it comes
+// round. The rounding happens here rather than where a handle is dropped, so retyping the
+// tempo rounds what the person dragged onto the new grid rather than re-rounding what the
+// old grid already moved.
+function clipOnBeats() {
+  const duration = state.audioBuffer.duration;
+  if (!state.clip) return { start: downbeat(), end: duration };
+
+  const beat = beatSeconds();
+  const snap = (t) => {
+    // an empty or nonsense tempo box has no grid to round onto
+    if (!beat) return Math.max(0, Math.min(duration, t));
+    // counted in whole beats off the phase, so the edge stays on the grid rather than
+    // being clamped to the ends of the song and landing between two beats
+    const phase = downbeat() % beat;
+    const k = Math.round((t - phase) / beat);
+    return phase + Math.min(Math.floor((duration - phase) / beat),
+                            Math.max(Math.ceil(-phase / beat), k)) * beat;
+  };
+
+  return { start: snap(state.clip.start), end: snap(state.clip.end) };
 }
 
 function computePeaks(width) {
@@ -1217,6 +1273,7 @@ function drawWave(playheadSeconds = null) {
   ctx.clearRect(0, 0, w, h);
 
   const duration = state.audioBuffer.duration;
+  const region = clipOnBeats();
   const at = (t) => Math.round((t / duration) * w) + 0.5;
   const css = getComputedStyle(document.body);
 
@@ -1237,8 +1294,8 @@ function drawWave(playheadSeconds = null) {
     const grid = new Path2D(), loop = new Path2D();
 
     for (let k = 0; ; k++) {
-      const t = downbeat() + k * step;
-      if (t >= duration) break;
+      const t = region.start + k * step;
+      if (t >= region.end) break;
       const x = at(t);
       if (k % currentTiming.beats.length === 0) {
         loop.moveTo(x - half, 0);
@@ -1261,12 +1318,11 @@ function drawWave(playheadSeconds = null) {
   // The song's own pulse, all the way along. Only the first few beats are ever marked, and
   // a row of lines that stopped two seconds in read as though the estimate had given up.
   // This is the song's beat, so it is 60/bpm, not the gif's hit rate.
-  const bpm = parseFloat($("bpm").value);
-  const beatSeconds = bpm > 0 ? 60 / bpm : 0;
-  if (beatSeconds && (beatSeconds / duration) * w >= 3) {
+  const pulseStep = beatSeconds();
+  if (pulseStep && (pulseStep / duration) * w >= 3) {
     const pulse = new Path2D();
     // from the downbeat's phase, so the grid covers the song ahead of the first mark too
-    for (let t = downbeat() % beatSeconds; t < duration; t += beatSeconds) {
+    for (let t = downbeat() % pulseStep; t < duration; t += pulseStep) {
       const x = at(t);
       pulse.moveTo(x, 0);
       pulse.lineTo(x, h);
@@ -1290,6 +1346,23 @@ function drawWave(playheadSeconds = null) {
   ctx.lineWidth = 2;
   ctx.stroke(beatLines);
 
+  // The song either side of the trimmed part is still worth seeing — it is what the edges
+  // are being dragged against — but it is not going in the video, so it is muted rather
+  // than cut off the drawing. The grips go on top, and are the only thing to grab.
+  const left = at(region.start), right = at(region.end);
+  ctx.save();
+  ctx.globalAlpha = 0.66;
+  ctx.fillStyle = css.getPropertyValue("--bg");
+  ctx.fillRect(0, 0, left, h);
+  ctx.fillRect(right, 0, w - right, h);
+  ctx.restore();
+
+  ctx.fillStyle = css.getPropertyValue("--ink");
+  for (const x of [left, right]) {
+    ctx.fillRect(x - 1, 0, 2, h);
+    ctx.fillRect(x - 3.5, h / 2 - 9, 7, 18);
+  }
+
   if (playheadSeconds !== null) {
     ctx.strokeStyle = css.getPropertyValue("--ink");
     ctx.lineWidth = 1;
@@ -1300,16 +1373,85 @@ function drawWave(playheadSeconds = null) {
   }
 }
 
+// Dragging an edge trims the song; clicking anywhere marks a beat. Which one a gesture is
+// only becomes clear once the pointer moves, so the drag does not start until it does. Left
+// on the press it would swallow the click that takes the first beat mark away, since the
+// left edge sits right on top of that mark until someone moves it.
+const GRAB_PX = 8, DRAG_PX = 3;
+let drag = null, clickWasADrag = false;
+
+function waveSeconds(event) {
+  const box = $("wave").getBoundingClientRect();
+  const duration = state.audioBuffer.duration;
+  return Math.max(0, Math.min(duration, ((event.clientX - box.left) / box.width) * duration));
+}
+
+function edgeUnderPointer(event) {
+  const box = $("wave").getBoundingClientRect();
+  const region = clipOnBeats();
+  const x = event.clientX - box.left;
+  const px = (t) => (t / state.audioBuffer.duration) * box.width;
+  const gaps = [["start", Math.abs(x - px(region.start))], ["end", Math.abs(x - px(region.end))]]
+    .filter(([, gap]) => gap <= GRAB_PX)
+    .sort((a, b) => a[1] - b[1]);
+  return gaps.length ? gaps[0][0] : null;
+}
+
+$("wave").onpointerdown = (e) => {
+  clickWasADrag = false;
+  const edge = edgeUnderPointer(e);
+  if (!edge) return;
+  drag = { edge, from: e.clientX, moved: false };
+  $("wave").setPointerCapture(e.pointerId);
+};
+
+$("wave").onpointermove = (e) => {
+  if (!drag) {
+    $("wave").classList.toggle("grab", !!edgeUnderPointer(e));
+    return;
+  }
+
+  if (!drag.moved) {
+    if (Math.abs(e.clientX - drag.from) < DRAG_PX) return;
+    drag.moved = true;
+    rememberSong();
+    // grabbing an edge of the whole song is what makes one part of it in the first place
+    state.clip ??= { start: downbeat(), end: state.audioBuffer.duration };
+  }
+
+  // a beat of room between the edges, so neither can be dragged through the other
+  const room = beatSeconds() || 0.25;
+  const t = waveSeconds(e);
+  if (drag.edge === "start") state.clip.start = Math.max(0, Math.min(t, state.clip.end - room));
+  else state.clip.end = Math.min(state.audioBuffer.duration, Math.max(t, state.clip.start + room));
+  refresh();
+};
+
+$("wave").onpointercancel = () => {
+  drag = null;
+  refresh();
+};
+
+$("wave").onpointerup = () => {
+  clickWasADrag = !!drag?.moved;
+  drag = null;
+  // the preview is held to the old bounds while a drag is in flight; this is where it
+  // picks up the new ones
+  if (clickWasADrag) refresh();
+};
+
 $("wave").onclick = (e) => {
+  if (clickWasADrag) return;
+
   const box = e.currentTarget.getBoundingClientRect();
   const duration = state.audioBuffer.duration;
-  const t = Math.max(0, Math.min(duration, ((e.clientX - box.left) / box.width) * duration));
+  const t = waveSeconds(e);
 
   // Clicking an existing mark takes it away again
   const tolerance = (8 / box.width) * duration;
   const near = state.audioBeats.findIndex((b) => Math.abs(b - t) < tolerance);
   if (near >= 0) {
-    rememberBeats();
+    rememberSong();
     beatsAreEstimates = false;
     state.audioBeats.splice(near, 1);
     setTempoFromBeats();
@@ -1320,7 +1462,7 @@ $("wave").onclick = (e) => {
 };
 
 function addAudioBeat(seconds) {
-  rememberBeats();
+  rememberSong();
   beatsAreEstimates = false;
   state.audioBeats.push(seconds);
   state.audioBeats.sort((a, b) => a - b);
@@ -1337,18 +1479,26 @@ function setTempoFromBeats() {
 }
 
 $("clearBeatsBtn").onclick = () => {
-  rememberBeats();
+  rememberSong();
   beatsAreEstimates = false;
   state.audioBeats = [];
   refresh();
 };
 
 $("undoBeatBtn").onclick = () => {
-  if (!beatHistory.length) return;
-  const previous = beatHistory.pop();
+  if (!songHistory.length) return;
+  const previous = songHistory.pop();
   state.audioBeats = previous.beats;
   beatsAreEstimates = previous.estimates;
+  state.clip = previous.clip;
   $("bpm").value = previous.bpm;
+  refresh();
+};
+
+$("wholeSongBtn").onclick = () => {
+  if (!state.clip) return;
+  rememberSong();
+  state.clip = null;
   refresh();
 };
 
@@ -1365,10 +1515,11 @@ function startPlayback() {
   stopGifPlayback();
   actx.resume();
 
-  const from = downbeat();
-  const span = state.audioBuffer.duration - from;
+  const region = clipOnBeats();
+  const from = region.start;
+  const span = region.end - from;
   if (!(span > 0)) {
-    fail(new Error("The downbeat is at the very end of the song, so there is nothing to play."));
+    fail(new Error("The part of the song to use has no length, so there is nothing to play."));
     return;
   }
 
@@ -1376,11 +1527,11 @@ function startPlayback() {
   source.buffer = state.audioBuffer;
   source.connect(actx.destination);
 
-  // Round and round from the downbeat to the end of the song, so a run of the animation
-  // can be watched over and over without reaching for the button between each one
+  // Round and round the part of the song being used, so a run of the animation can be
+  // watched over and over without reaching for the button between each one
   source.loop = true;
   source.loopStart = from;
-  source.loopEnd = state.audioBuffer.duration;
+  source.loopEnd = region.end;
 
   const t0 = actx.currentTime + 0.08;
   source.start(t0, from);
@@ -1445,7 +1596,7 @@ $("previewBtn").onclick = () => (playback ? stopPlayback() : startPlayback());
 // waveform is the way to nudge one into exactly the right place afterwards
 function tapBeat() {
   if (!playback) return;
-  addAudioBeat(playback.from + Math.max(0, actx.currentTime - playback.t0));
+  addAudioBeat(playback.from + Math.max(0, actx.currentTime - playback.t0) % playback.span);
 }
 
 $("tapBeatBtn").onclick = tapBeat;
@@ -1804,7 +1955,7 @@ async function estimateSong({ keepExistingBeats }) {
     // meantime was marked by a person and outranks the guess. Pressing the button does
     // mean replace, and that is undoable.
     if (!(keepExistingBeats && state.audioBeats.length)) {
-      if (!keepExistingBeats) rememberBeats();
+      if (!keepExistingBeats) rememberSong();
       const period = 60 / bpm;
       const first = findFirstBeat(mono, bpm);
       // Four marks: one would be enough to say where the animation starts, and four say
@@ -1888,7 +2039,7 @@ function refresh() {
   }
 
   $("undoMarkBtn").disabled = !markHistory.length;
-  $("undoBeatBtn").disabled = !beatHistory.length;
+  $("undoBeatBtn").disabled = !songHistory.length;
 
   buildBeatStrip();
   showCurrentFrame();
@@ -1911,13 +2062,18 @@ function refresh() {
 
   if (ready.audio) {
     const marks = state.audioBeats.length;
-    const from = `The video starts at <b>${downbeat().toFixed(2)}s</b>, on the first of them.`;
+    const region = clipOnBeats();
+    const from = state.clip
+      ? `The video is made from <b>${timeLabel(region.start)}</b> to <b>${timeLabel(region.end)}</b>` +
+        ` — <b>${(region.end - region.start).toFixed(1)}s</b> of the song.`
+      : `The video starts at <b>${downbeat().toFixed(2)}s</b>, on the first beat mark.`;
     $("audioSummary").innerHTML = !marks
-      ? "Click the waveform where you hear a beat, or press B along to the music."
+      ? `Click the waveform where you hear a beat, or press B along to the music. ${state.clip ? from : ""}`
       : beatsAreEstimates
         ? `The estimate marked the song's first <b>${marks}</b> beats to show the pace it heard. ${from}`
         : `<b>${marks}</b> beat${marks > 1 ? "s" : ""} marked. ${from}`;
-    drawWave(playback ? playback.from + Math.max(0, actx.currentTime - playback.t0) : null);
+    $("wholeSongBtn").hidden = !state.clip;
+    drawWave(playback ? playback.from + Math.max(0, actx.currentTime - playback.t0) % playback.span : null);
   }
 
   $("timingSummary").innerHTML = problem ? `<span class="warn">${problem}</span>` : "";
@@ -1955,10 +2111,15 @@ function refresh() {
     $(s.id + "Why").textContent = s.why;
   });
 
-  // Tempo changes take effect on the running preview; moving the downbeat has to
-  // restart it, since that is where the audio is playing from
+  // Tempo changes take effect on the running preview; moving either edge of the part in
+  // use has to restart it, since that is what the audio is looping over. Mid-drag the old
+  // loop keeps playing — restarting the song on every pointer move would stutter — and
+  // the pointer coming up does the restart.
   if (playback) {
-    if (Math.abs(playback.from - downbeat()) > 1e-9) startPlayback();
+    const region = clipOnBeats();
+    if (!drag?.moved &&
+        (Math.abs(playback.from - region.start) > 1e-9 ||
+         Math.abs(playback.span - (region.end - region.start)) > 1e-9)) startPlayback();
     else retimeClicks();
   }
 
@@ -2383,7 +2544,7 @@ async function encodeAudio(seconds) {
   const buffer = state.audioBuffer;
   const sampleRate = buffer.sampleRate;
   const channels = Math.min(2, buffer.numberOfChannels);
-  const start = Math.round(downbeat() * sampleRate);
+  const start = Math.round(clipOnBeats().start * sampleRate);
   const total = Math.min(buffer.length - start, Math.round(seconds * sampleRate));
 
   const codec = await pickAudioCodec();
@@ -2487,7 +2648,10 @@ $("renderBrowserBtn").onclick = async () => {
   if (codecWarning) toast("codec", codecWarning, { stay: true });
 
   try {
-    const seconds = state.audioBuffer.duration - downbeat();
+    const region = clipOnBeats();
+    const seconds = region.end - region.start;
+    // a beat longer than the song snaps both edges onto the same grid point
+    if (!(seconds > 0)) throw new Error("The part of the song to use has no length.");
     // H.264 needs even dimensions; an odd gif gets one transparent row or column
     const width = state.width + (state.width % 2);
     const height = state.height + (state.height % 2);
