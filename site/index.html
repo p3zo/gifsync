@@ -1214,33 +1214,39 @@ function timeLabel(seconds) {
   return `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(2).padStart(5, "0")}`;
 }
 
-// The part of the song the video is made from. state.clip is where the two edges were
-// dragged to; null is the whole song from the downbeat, which is where the video started
-// from before any of this existed.
-//
-// Both edges are rounded onto the song's beat grid. The animation's first beat frame lands
-// on the video's first sample, so a start off the beat puts every beat of the animation off
-// the beat with it, and an end off the beat makes the preview lurch every time it comes
-// round. The rounding happens here rather than where a handle is dropped, so retyping the
-// tempo rounds what the person dragged onto the new grid rather than re-rounding what the
-// old grid already moved.
+// Where the video begins, and so where the animation counts its beats off from: the trim
+// start once there is one, and the first beat mark until then. This is the anchor rather
+// than the marks because it has to hold still. Marking beats along to the music moves the
+// first mark and rewrites the tempo from the spacing of them all, and anything phased off
+// that would wander away under the hand that had just placed it.
+function phaseSeconds() {
+  return state.clip ? state.clip.start : downbeat();
+}
+
+// The part of the song the video is made from — as dragged, and left exactly there. Both
+// edges were rounded onto the beat as they were dropped (snapToBeat, in the drag), which
+// is what keeps the animation's first frame on a real beat of the song; re-rounding them
+// on every read is what used to move them.
 function clipOnBeats() {
   const duration = state.audioBuffer.duration;
   if (!state.clip) return { start: downbeat(), end: duration };
-
-  const beat = beatSeconds();
-  const snap = (t) => {
-    // an empty or nonsense tempo box has no grid to round onto
-    if (!beat) return Math.max(0, Math.min(duration, t));
-    // counted in whole beats off the phase, so the edge stays on the grid rather than
-    // being clamped to the ends of the song and landing between two beats
-    const phase = downbeat() % beat;
-    const k = Math.round((t - phase) / beat);
-    return phase + Math.min(Math.floor((duration - phase) / beat),
-                            Math.max(Math.ceil(-phase / beat), k)) * beat;
+  return {
+    start: Math.max(0, Math.min(duration, state.clip.start)),
+    end: Math.max(0, Math.min(duration, state.clip.end)),
   };
+}
 
-  return { start: snap(state.clip.start), end: snap(state.clip.end) };
+// The nearest beat of the song to a moment in it, counted off the beat marks: whole beats
+// from the first mark, at the tempo the marks and the box agree on. An empty or nonsense
+// tempo box has no grid to round onto, and the moment stands as it is.
+function snapToBeat(t) {
+  const beat = beatSeconds();
+  if (!beat) return t;
+  const duration = state.audioBuffer.duration;
+  const phase = downbeat() % beat;
+  const k = Math.round((t - phase) / beat);
+  return phase + Math.min(Math.floor((duration - phase) / beat),
+                          Math.max(Math.ceil(-phase / beat), k)) * beat;
 }
 
 // The stretch of the song on screen. null is all of it; scrolling on the waveform zooms
@@ -1376,7 +1382,7 @@ function drawWave(playheadSeconds = null) {
   if (pulseStep && (pulseStep / span) * w >= 3) {
     const pulse = new Path2D();
     // from the downbeat's phase, so the grid covers the song ahead of the first mark too
-    const phase = downbeat() % pulseStep;
+    const phase = phaseSeconds() % pulseStep;
     const from = phase + Math.ceil((win.start - phase) / pulseStep) * pulseStep;
     for (let t = from; t < win.end; t += pulseStep) {
       const x = at(t);
@@ -1498,7 +1504,7 @@ $("wave").onpointermove = (e) => {
 
   // a beat of room between the edges, so neither can be dragged through the other
   const room = beatSeconds() || 0.25;
-  const t = waveSeconds(e);
+  const t = snapToBeat(waveSeconds(e));
   if (drag.edge === "start") state.clip.start = Math.max(0, Math.min(t, state.clip.end - room));
   else state.clip.end = Math.min(state.audioBuffer.duration, Math.max(t, state.clip.start + room));
   refresh();
