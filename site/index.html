@@ -438,6 +438,7 @@ details.more .row { margin-top: .6rem; }
     <canvas id="wave"></canvas>
     <div class="row">
       <span class="say" id="audioSummary"></span>
+      <button id="zoomOutBtn">Zoom out</button>
       <button id="wholeSongBtn">Use the whole song</button>
     </div>
     <div class="row legend">
@@ -1254,37 +1255,47 @@ function snapToBeat(t) {
 // song — at five minutes across one panel, a beat is two pixels wide.
 let view = null;
 
+// A window much under a second serves nothing: the edges land on whole beats anyway, and
+// this is about telling neighbouring beats apart, not samples.
+const MIN_VIEW = 1;
+
 function viewWindow() {
   return view ?? { start: 0, end: state.audioBuffer.duration };
+}
+
+// Every way of changing the window goes through here, so all of them clamp alike and a
+// window as wide as the song is the same thing as not being zoomed in at all.
+function setView(start, span) {
+  const duration = state.audioBuffer.duration;
+  const width = Math.max(MIN_VIEW, Math.min(duration, span));
+  if (width >= duration) { view = null; return; }
+  const from = Math.max(0, Math.min(duration - width, start));
+  view = { start: from, end: from + width };
+}
+
+function redrawWave() {
+  drawWave(playback ? playback.from + Math.max(0, actx.currentTime - playback.t0) % playback.span : null);
 }
 
 $("wave").onwheel = (e) => {
   if (!state.audioBuffer) return;
   e.preventDefault();
 
-  const duration = state.audioBuffer.duration;
   const win = viewWindow();
   const span = win.end - win.start;
   const box = e.currentTarget.getBoundingClientRect();
   // wheels report lines, trackpads pixels
   const unit = e.deltaMode === 1 ? 16 : 1;
 
-  let next, start;
   if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
     // a sideways scroll slides the window along the song
-    next = span;
-    start = win.start + ((e.deltaX * unit) / box.width) * span;
+    setView(win.start + ((e.deltaX * unit) / box.width) * span, span);
   } else {
-    // hold the moment under the pointer still and scale the window around it. A window
-    // much under a second serves nothing: the edges land on whole beats anyway, and
-    // this is about telling neighbouring beats apart.
-    next = Math.max(1, Math.min(duration, span * Math.exp(e.deltaY * unit * 0.002)));
-    start = win.start + ((e.clientX - box.left) / box.width) * (span - next);
+    // hold the moment under the pointer still and scale the window around it
+    const next = span * Math.exp(e.deltaY * unit * 0.002);
+    setView(win.start + ((e.clientX - box.left) / box.width) * (span - next), next);
   }
-  start = Math.max(0, Math.min(duration - next, start));
-  view = next >= duration ? null : { start, end: start + next };
-
-  drawWave(playback ? playback.from + Math.max(0, actx.currentTime - playback.t0) % playback.span : null);
+  redrawWave();
 };
 
 // keyed on the window as well as the width, so zooming re-reads the samples
@@ -1502,6 +1513,17 @@ $("wave").onpointermove = (e) => {
     state.clip ??= { start: downbeat(), end: state.audioBuffer.duration };
   }
 
+  // Zoomed in, the pointer runs out of panel long before the song runs out of beats.
+  // Pointer capture keeps the moves coming from outside the canvas, so carrying an edge
+  // out past the side slides the window after it rather than pinning the edge to the wall.
+  if (view) {
+    const box = $("wave").getBoundingClientRect();
+    const over = e.clientX < box.left ? e.clientX - box.left
+      : e.clientX > box.right ? e.clientX - box.right : 0;
+    const span = view.end - view.start;
+    if (over) setView(view.start + (over / box.width) * span, span);
+  }
+
   // a beat of room between the edges, so neither can be dragged through the other
   const room = beatSeconds() || 0.25;
   const t = snapToBeat(waveSeconds(e));
@@ -1518,9 +1540,19 @@ $("wave").onpointercancel = () => {
 $("wave").onpointerup = () => {
   clickWasADrag = !!drag?.moved;
   drag = null;
+  if (!clickWasADrag) return;
+
+  // A part picked out of a long song ends up a few pixels wide, where the next nudge is
+  // guesswork. Frame it, once, when the handle is let go — and only when it really is a
+  // sliver of what is on screen, so refining a part that already fits leaves the view be.
+  const region = clipOnBeats();
+  const span = region.end - region.start;
+  const shown = viewWindow();
+  if (span < (shown.end - shown.start) * 0.35) setView(region.start - span * 0.25, span * 1.5);
+
   // the preview is held to the old bounds while a drag is in flight; this is where it
   // picks up the new ones
-  if (clickWasADrag) refresh();
+  refresh();
 };
 
 $("wave").onclick = (e) => {
@@ -1582,6 +1614,13 @@ $("wholeSongBtn").onclick = () => {
   if (!state.clip) return;
   rememberSong();
   state.clip = null;
+  // the zoom was for placing edges that no longer exist
+  view = null;
+  refresh();
+};
+
+$("zoomOutBtn").onclick = () => {
+  view = null;
   refresh();
 };
 
@@ -1644,7 +1683,15 @@ function tickPlayback() {
     // the animation wrap with it rather than running off past the end
     const pos = elapsed % playback.span;
 
-    drawWave(playback.from + pos);
+    // Zoomed in on a part longer than the window, the playhead would walk off the side
+    // and leave nothing moving to watch. Turn the page when it does.
+    const t = playback.from + pos;
+    if (view && (t < view.start || t > view.end)) {
+      const span = view.end - view.start;
+      setView(t - span * 0.1, span);
+    }
+
+    drawWave(t);
     // currentTiming is read fresh every frame, so a tempo change lands immediately
     if (currentTiming) {
       const ms = pos * 1000;
@@ -2205,6 +2252,7 @@ function refresh() {
           `${state.clip ? "the part in use" : "the song"} to show the pace it heard. ${from}`
         : `<b>${marks}</b> beat${marks > 1 ? "s" : ""} marked. ${from}`;
     $("wholeSongBtn").hidden = !state.clip;
+    $("zoomOutBtn").hidden = !view;
     drawWave(playback ? playback.from + Math.max(0, actx.currentTime - playback.t0) % playback.span : null);
   }
 
