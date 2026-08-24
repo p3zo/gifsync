@@ -2208,16 +2208,31 @@ function refresh() {
     $(s.id + "Why").textContent = s.why;
   });
 
-  // Tempo changes take effect on the running preview; moving either edge of the part in
-  // use has to restart it, since that is what the audio is looping over. Mid-drag the old
-  // loop keeps playing — restarting the song on every pointer move would stutter — and
-  // the pointer coming up does the restart.
+  // Tempo changes take effect on the running preview, and so do the loop's own edges:
+  // loopStart and loopEnd are live on a playing source, so marking a beat or moving a
+  // handle reshapes the loop in place rather than yanking the song back to the top. The
+  // one thing that forces a restart is the playhead being left beyond the new end, where
+  // a looping source's behaviour is nothing anyone chose.
   if (playback) {
     const region = clipOnBeats();
-    if (!drag?.moved &&
-        (Math.abs(playback.from - region.start) > 1e-9 ||
-         Math.abs(playback.span - (region.end - region.start)) > 1e-9)) startPlayback();
-    else retimeClicks();
+    const span = region.end - region.start;
+    if (Math.abs(playback.from - region.start) > 1e-9 || Math.abs(playback.span - span) > 1e-9) {
+      const pos = playback.from + Math.max(0, actx.currentTime - playback.t0) % playback.span;
+      if (pos > region.end) {
+        // not mid-drag, where a restart on every pointer move stutters; release does it
+        if (!drag?.moved) startPlayback();
+      } else {
+        playback.source.loopStart = region.start;
+        playback.source.loopEnd = region.end;
+        playback.from = region.start;
+        playback.span = span;
+        // rebase the clock so position = from + elapsed % span keeps naming where the
+        // audio really is; ahead of a loop that moved past it, elapsed sits negative
+        // and the animation holds until the audio walks in
+        playback.t0 = actx.currentTime - (pos - region.start);
+        retimeClicks();
+      }
+    } else retimeClicks();
   }
 
   return currentTiming;
