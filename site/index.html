@@ -604,7 +604,7 @@ function remember(history, snapshot) {
 const state = {
   gifFile: null, frames: [], holds: [], width: 0, height: 0, cur: 0, beats: new Set(),
   startFrame: null, credit: null,
-  audioFile: null, audioBuffer: null, audioBeats: [], peaks: null, clip: null,
+  audioFile: null, audioBuffer: null, audioBeats: [], peaks: null, peakScale: 1, clip: null,
 };
 
 /* ---------------------------------------------------------------- capabilities */
@@ -1178,6 +1178,17 @@ async function loadAudio(file) {
     throw new Error(`${file.name} could not be read as audio. ${err.message}`);
   }
   state.audioFile = file;
+  // The bars are drawn against the song's own loudest moment, not full scale: a quietly
+  // mastered recording still has to fill the panel, or there is nothing to drag against.
+  {
+    const data = state.audioBuffer.getChannelData(0);
+    let peak = 0;
+    for (let i = 0; i < data.length; i++) {
+      const v = Math.abs(data[i]);
+      if (v > peak) peak = v;
+    }
+    state.peakScale = 1 / Math.max(peak, 1e-6);
+  }
   state.audioBeats = [];
   beatsAreEstimates = false;
   state.peaks = null;
@@ -1370,7 +1381,7 @@ function drawWave(playheadSeconds = null) {
 
   ctx.fillStyle = css.getPropertyValue("--dim");
   for (let x = 0; x < w; x++) {
-    const bar = Math.max(1, state.peaks[x] * h * 0.9);
+    const bar = Math.max(1, Math.min(1, state.peaks[x] * state.peakScale) * h * 0.9);
     ctx.fillRect(x, (h - bar) / 2, 1, bar);
   }
 
