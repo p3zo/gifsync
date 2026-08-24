@@ -455,7 +455,7 @@ details.more .row { margin-top: .6rem; }
         <line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="2"/></svg>
         beats you marked</span>
       <span><svg class="glyph g-mark" viewBox="0 0 12 18" aria-hidden="true">
-        <line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="1" opacity=".3"/></svg>
+        <line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="1" opacity=".55"/></svg>
         every beat at this tempo</span>
       <span><svg class="glyph g-grid" viewBox="0 0 12 18" aria-hidden="true">
         <polygon points="1,18 11,18 6,9" fill="currentColor"/></svg>
@@ -1214,6 +1214,9 @@ async function loadAudio(file) {
 // mark at the head of a long song looks like something went wrong; it is the estimate
 // naming the downbeat, and the summary has to say so.
 let beatsAreEstimates = false;
+// ...and whether that estimate listened to a trimmed part or the whole song. The summary
+// reads this rather than the live trim, which may have changed since it listened.
+let estimateUsedClip = false;
 
 // The tempo is read off the beats, and the trimmed part of the song is rounded onto the
 // grid those beats set, so putting a beat back has to put both of those back with it
@@ -2206,6 +2209,7 @@ async function estimateSong({ keepExistingBeats }) {
       // marks of its own: it is already drawn along the whole song as the faint grid.
       state.audioBeats = first < region.end ? [first] : [];
       beatsAreEstimates = true;
+      estimateUsedClip = fromClip;
     }
 
     $("estimateNote").innerHTML =
@@ -2348,7 +2352,7 @@ function refresh() {
       ? "Right-click the waveform where you hear a beat, or press B along to the music. " +
         `Click plays from that point. ${state.clip ? from : ""}`
       : beatsAreEstimates
-        ? `The estimate marked the first beat of ${state.clip ? "the part in use" : "the song"}; ` +
+        ? `The estimate marked the first beat of ${estimateUsedClip ? "the part in use" : "the song"}; ` +
           `the faint lines are the rest of its beats at this tempo. ${from}`
         : `<b>${marks}</b> beat${marks > 1 ? "s" : ""} marked. ${from}`;
     $("wholeSongBtn").hidden = !state.clip;
