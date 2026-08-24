@@ -391,12 +391,14 @@ details.more .row { margin-top: .6rem; }
     </div>
     <div class="stagecontrols">
       <div class="row">
-        <button id="previewBtn" class="primary">Play preview (space)</button>
+        <button id="previewBtn" class="primary">Play preview (spacebar)</button>
         <span class="say" id="previewPos"></span>
       </div>
       <div class="row">
         <label>Tempo (BPM) <input type="number" id="bpm" step="0.1" min="1" value="120"></label>
         <button id="estimateBtn">Estimate tempo</button>
+        <button id="halfBtn" title="Halve the tempo">&divide;2</button>
+        <button id="doubleBtn" title="Double the tempo">&times;2</button>
       </div>
       <div class="row">
         <label>The GIF hits
@@ -438,6 +440,7 @@ details.more .row { margin-top: .6rem; }
     <canvas id="wave"></canvas>
     <div class="row">
       <span class="say" id="audioSummary"></span>
+      <button id="zoomOutBtn">Zoom out</button>
       <button id="wholeSongBtn">Use the whole song</button>
     </div>
     <div class="row legend">
@@ -934,7 +937,7 @@ $("undoMarkBtn").onclick = () => {
 };
 
 addEventListener("keydown", (e) => {
-  if (e.target.matches("input, select, textarea")) return;
+  if (e.target.matches("textarea, select, input:not([type=checkbox]):not([type=radio])")) return;
   if (e.key === "ArrowLeft") { step(-1); e.preventDefault(); }
   else if (e.key === "ArrowRight") { step(1); e.preventDefault(); }
   else if (e.key === " ") {
@@ -1167,7 +1170,7 @@ async function loadAudio(file) {
   beatsAreEstimates = false;
   state.peaks = null;
   state.clip = null;
-  view = null;
+  clearView();
   songHistory.length = 0;
   songToken++;
   userSetTempo = false;
@@ -1214,33 +1217,39 @@ function timeLabel(seconds) {
   return `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(2).padStart(5, "0")}`;
 }
 
-// The part of the song the video is made from. state.clip is where the two edges were
-// dragged to; null is the whole song from the downbeat, which is where the video started
-// from before any of this existed.
-//
-// Both edges are rounded onto the song's beat grid. The animation's first beat frame lands
-// on the video's first sample, so a start off the beat puts every beat of the animation off
-// the beat with it, and an end off the beat makes the preview lurch every time it comes
-// round. The rounding happens here rather than where a handle is dropped, so retyping the
-// tempo rounds what the person dragged onto the new grid rather than re-rounding what the
-// old grid already moved.
+// Where the video begins, and so where the animation counts its beats off from: the trim
+// start once there is one, and the first beat mark until then. This is the anchor rather
+// than the marks because it has to hold still. Marking beats along to the music moves the
+// first mark and rewrites the tempo from the spacing of them all, and anything phased off
+// that would wander away under the hand that had just placed it.
+function phaseSeconds() {
+  return state.clip ? state.clip.start : downbeat();
+}
+
+// The part of the song the video is made from — as dragged, and left exactly there. Both
+// edges were rounded onto the beat as they were dropped (snapToBeat, in the drag), which
+// is what keeps the animation's first frame on a real beat of the song; re-rounding them
+// on every read is what used to move them.
 function clipOnBeats() {
   const duration = state.audioBuffer.duration;
   if (!state.clip) return { start: downbeat(), end: duration };
-
-  const beat = beatSeconds();
-  const snap = (t) => {
-    // an empty or nonsense tempo box has no grid to round onto
-    if (!beat) return Math.max(0, Math.min(duration, t));
-    // counted in whole beats off the phase, so the edge stays on the grid rather than
-    // being clamped to the ends of the song and landing between two beats
-    const phase = downbeat() % beat;
-    const k = Math.round((t - phase) / beat);
-    return phase + Math.min(Math.floor((duration - phase) / beat),
-                            Math.max(Math.ceil(-phase / beat), k)) * beat;
+  return {
+    start: Math.max(0, Math.min(duration, state.clip.start)),
+    end: Math.max(0, Math.min(duration, state.clip.end)),
   };
+}
 
-  return { start: snap(state.clip.start), end: snap(state.clip.end) };
+// The nearest beat of the song to a moment in it, counted off the beat marks: whole beats
+// from the first mark, at the tempo the marks and the box agree on. An empty or nonsense
+// tempo box has no grid to round onto, and the moment stands as it is.
+function snapToBeat(t) {
+  const beat = beatSeconds();
+  if (!beat) return t;
+  const duration = state.audioBuffer.duration;
+  const phase = downbeat() % beat;
+  const k = Math.round((t - phase) / beat);
+  return phase + Math.min(Math.floor((duration - phase) / beat),
+                          Math.max(Math.ceil(-phase / beat), k)) * beat;
 }
 
 // The stretch of the song on screen. null is all of it; scrolling on the waveform zooms
@@ -1248,37 +1257,55 @@ function clipOnBeats() {
 // song — at five minutes across one panel, a beat is two pixels wide.
 let view = null;
 
+// A window much under a second serves nothing: the edges land on whole beats anyway, and
+// this is about telling neighbouring beats apart, not samples.
+const MIN_VIEW = 1;
+
 function viewWindow() {
   return view ?? { start: 0, end: state.audioBuffer.duration };
+}
+
+// Every way of changing the window goes through here, so all of them clamp alike and a
+// window as wide as the song is the same thing as not being zoomed in at all.
+function setView(start, span) {
+  const duration = state.audioBuffer.duration;
+  const width = Math.max(MIN_VIEW, Math.min(duration, span));
+  if (width >= duration) view = null;
+  else {
+    const from = Math.max(0, Math.min(duration - width, start));
+    view = { start: from, end: from + width };
+  }
+  $("zoomOutBtn").hidden = !view;
+}
+
+function clearView() {
+  view = null;
+  $("zoomOutBtn").hidden = true;
+}
+
+function redrawWave() {
+  drawWave(playback ? playback.from + Math.max(0, actx.currentTime - playback.t0) % playback.span : null);
 }
 
 $("wave").onwheel = (e) => {
   if (!state.audioBuffer) return;
   e.preventDefault();
 
-  const duration = state.audioBuffer.duration;
   const win = viewWindow();
   const span = win.end - win.start;
   const box = e.currentTarget.getBoundingClientRect();
   // wheels report lines, trackpads pixels
   const unit = e.deltaMode === 1 ? 16 : 1;
 
-  let next, start;
   if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
     // a sideways scroll slides the window along the song
-    next = span;
-    start = win.start + ((e.deltaX * unit) / box.width) * span;
+    setView(win.start + ((e.deltaX * unit) / box.width) * span, span);
   } else {
-    // hold the moment under the pointer still and scale the window around it. A window
-    // much under a second serves nothing: the edges land on whole beats anyway, and
-    // this is about telling neighbouring beats apart.
-    next = Math.max(1, Math.min(duration, span * Math.exp(e.deltaY * unit * 0.002)));
-    start = win.start + ((e.clientX - box.left) / box.width) * (span - next);
+    // hold the moment under the pointer still and scale the window around it
+    const next = span * Math.exp(e.deltaY * unit * 0.002);
+    setView(win.start + ((e.clientX - box.left) / box.width) * (span - next), next);
   }
-  start = Math.max(0, Math.min(duration - next, start));
-  view = next >= duration ? null : { start, end: start + next };
-
-  drawWave(playback ? playback.from + Math.max(0, actx.currentTime - playback.t0) % playback.span : null);
+  redrawWave();
 };
 
 // keyed on the window as well as the width, so zooming re-reads the samples
@@ -1376,7 +1403,7 @@ function drawWave(playheadSeconds = null) {
   if (pulseStep && (pulseStep / span) * w >= 3) {
     const pulse = new Path2D();
     // from the downbeat's phase, so the grid covers the song ahead of the first mark too
-    const phase = downbeat() % pulseStep;
+    const phase = phaseSeconds() % pulseStep;
     const from = phase + Math.ceil((win.start - phase) / pulseStep) * pulseStep;
     for (let t = from; t < win.end; t += pulseStep) {
       const x = at(t);
@@ -1496,9 +1523,20 @@ $("wave").onpointermove = (e) => {
     state.clip ??= { start: downbeat(), end: state.audioBuffer.duration };
   }
 
+  // Zoomed in, the pointer runs out of panel long before the song runs out of beats.
+  // Pointer capture keeps the moves coming from outside the canvas, so carrying an edge
+  // out past the side slides the window after it rather than pinning the edge to the wall.
+  if (view) {
+    const box = $("wave").getBoundingClientRect();
+    const over = e.clientX < box.left ? e.clientX - box.left
+      : e.clientX > box.right ? e.clientX - box.right : 0;
+    const span = view.end - view.start;
+    if (over) setView(view.start + (over / box.width) * span, span);
+  }
+
   // a beat of room between the edges, so neither can be dragged through the other
   const room = beatSeconds() || 0.25;
-  const t = waveSeconds(e);
+  const t = snapToBeat(waveSeconds(e));
   if (drag.edge === "start") state.clip.start = Math.max(0, Math.min(t, state.clip.end - room));
   else state.clip.end = Math.min(state.audioBuffer.duration, Math.max(t, state.clip.start + room));
   refresh();
@@ -1512,9 +1550,19 @@ $("wave").onpointercancel = () => {
 $("wave").onpointerup = () => {
   clickWasADrag = !!drag?.moved;
   drag = null;
+  if (!clickWasADrag) return;
+
+  // A part picked out of a long song ends up a few pixels wide, where the next nudge is
+  // guesswork. Frame it, once, when the handle is let go — and only when it really is a
+  // sliver of what is on screen, so refining a part that already fits leaves the view be.
+  const region = clipOnBeats();
+  const span = region.end - region.start;
+  const shown = viewWindow();
+  if (span < (shown.end - shown.start) * 0.35) setView(region.start - span * 0.25, span * 1.5);
+
   // the preview is held to the old bounds while a drag is in flight; this is where it
   // picks up the new ones
-  if (clickWasADrag) refresh();
+  refresh();
 };
 
 $("wave").onclick = (e) => {
@@ -1576,6 +1624,13 @@ $("wholeSongBtn").onclick = () => {
   if (!state.clip) return;
   rememberSong();
   state.clip = null;
+  // the zoom was for placing edges that no longer exist
+  clearView();
+  refresh();
+};
+
+$("zoomOutBtn").onclick = () => {
+  clearView();
   refresh();
 };
 
@@ -1638,7 +1693,15 @@ function tickPlayback() {
     // the animation wrap with it rather than running off past the end
     const pos = elapsed % playback.span;
 
-    drawWave(playback.from + pos);
+    // Zoomed in on a part longer than the window, the playhead would walk off the side
+    // and leave nothing moving to watch. Turn the page when it does.
+    const t = playback.from + pos;
+    if (view && (t < view.start || t > view.end)) {
+      const span = view.end - view.start;
+      setView(t - span * 0.1, span);
+    }
+
+    drawWave(t);
     // currentTiming is read fresh every frame, so a tempo change lands immediately
     if (currentTiming) {
       const ms = pos * 1000;
@@ -1658,7 +1721,7 @@ function tickPlayback() {
 }
 
 function syncTransport() {
-  $("previewBtn").textContent = playback ? "Stop (space)" : "Play preview (space)";
+  $("previewBtn").textContent = playback ? "Stop (spacebar)" : "Play preview (spacebar)";
   $("tapBeatBtn").disabled = !playback;
   // a disabled button swallows its own hover, so the reason hangs off the wrapper
   $("tapBeatWrap").title = playback
@@ -1705,19 +1768,31 @@ function pumpClicks() {
     if (at >= horizon) break;
 
     if (at > actx.currentTime) {
-      const osc = actx.createOscillator(), gain = actx.createGain();
-      osc.frequency.value = 1500;
-      gain.gain.setValueAtTime(0.07, at);
-      gain.gain.exponentialRampToValueAtTime(0.001, at + 0.04);
-      osc.connect(gain).connect(actx.destination);
-      osc.start(at);
-      osc.stop(at + 0.05);
-      playback.clicks.push({ osc, at });
+      // the loop's own first beat is worth hearing apart from the rest of them
+      const first = currentTiming && playback.nextBeat % currentTiming.beats.length === 0;
+      playback.clicks.push({ osc: click(at, first), at });
     }
     playback.nextBeat++;
   }
 
   playback.clicks = playback.clicks.filter((c) => c.at > actx.currentTime - 1);
+}
+
+// A quiet sine sits at 1500Hz, which is where a mix is busiest, and vanishes into it. A
+// metronome has to cut through what it is counting: an edge to the tone and a fall in
+// pitch give it an attack to hear, and the level has to stand up to the music rather than
+// duck under it.
+function click(at, first) {
+  const osc = actx.createOscillator(), gain = actx.createGain();
+  osc.type = "square";
+  osc.frequency.setValueAtTime(first ? 2400 : 1600, at);
+  osc.frequency.exponentialRampToValueAtTime(first ? 1000 : 700, at + 0.03);
+  gain.gain.setValueAtTime(first ? 0.5 : 0.32, at);
+  gain.gain.exponentialRampToValueAtTime(0.001, at + 0.045);
+  osc.connect(gain).connect(actx.destination);
+  osc.start(at);
+  osc.stop(at + 0.06);
+  return osc;
 }
 
 function clearPendingClicks() {
@@ -2108,6 +2183,18 @@ function getMsPerBeat() {
 
 $("bpm").oninput = () => { userSetTempo = true; refresh(); };
 
+// The tempo model names half or twice the real tempo often enough to be worth one button
+// each: which of the three it is takes one listen to tell, and no listening at all to fix.
+for (const [id, factor] of [["halfBtn", 0.5], ["doubleBtn", 2]]) {
+  $(id).onclick = () => {
+    const bpm = parseFloat($("bpm").value);
+    if (!(bpm > 0)) return;
+    userSetTempo = true;
+    $("bpm").value = (bpm * factor).toFixed(1);
+    refresh();
+  };
+}
+
 for (const id of ["hits", "interpolation", "clickTrack"]) {
   $(id).oninput = refresh;
 }
@@ -2187,6 +2274,7 @@ function refresh() {
           `${state.clip ? "the part in use" : "the song"} to show the pace it heard. ${from}`
         : `<b>${marks}</b> beat${marks > 1 ? "s" : ""} marked. ${from}`;
     $("wholeSongBtn").hidden = !state.clip;
+    $("zoomOutBtn").hidden = !view;
     drawWave(playback ? playback.from + Math.max(0, actx.currentTime - playback.t0) % playback.span : null);
   }
 
