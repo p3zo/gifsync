@@ -1502,6 +1502,7 @@ function edgeUnderPointer(event) {
 }
 
 $("wave").onpointerdown = (e) => {
+  if (e.button !== 0) return;
   clickWasADrag = false;
   const edge = edgeUnderPointer(e);
   if (!edge) return;
@@ -1567,12 +1568,17 @@ $("wave").onpointerup = () => {
 
 $("wave").onclick = (e) => {
   if (clickWasADrag) return;
+  startPlayback(waveSeconds(e));
+};
+
+$("wave").oncontextmenu = (e) => {
+  e.preventDefault();
 
   const box = e.currentTarget.getBoundingClientRect();
   const win = viewWindow();
   const t = waveSeconds(e);
 
-  // Clicking an existing mark takes it away again
+  // Right-clicking an existing mark takes it away again
   const tolerance = (8 / box.width) * (win.end - win.start);
   const near = state.audioBeats.findIndex((b) => Math.abs(b - t) < tolerance);
   if (near >= 0) {
@@ -1642,7 +1648,7 @@ wireDrop("audioDrop", "audioInput", loadAudio);
 // so the two can never end up playing at once
 let playback = null;
 
-function startPlayback() {
+function startPlayback(at = null) {
   stopPlayback();
   stopGifPlayback();
   actx.resume();
@@ -1655,6 +1661,9 @@ function startPlayback() {
     return;
   }
 
+  // where to drop the needle: the loop's start, or the moment that was clicked
+  const offset = at === null ? from : Math.max(from, Math.min(region.end - 0.01, at));
+
   const source = actx.createBufferSource();
   source.buffer = state.audioBuffer;
   source.connect(actx.destination);
@@ -1665,11 +1674,14 @@ function startPlayback() {
   source.loopStart = from;
   source.loopEnd = region.end;
 
-  const t0 = actx.currentTime + 0.08;
-  source.start(t0, from);
+  // t0 stays the wall time the loop's start would have played at, so starting mid-loop
+  // changes nothing else: position = from + elapsed % span holds from the first frame
+  const begin = actx.currentTime + 0.08;
+  source.start(begin, offset);
   source.onended = () => { if (playback?.source === source) stopPlayback(); };
 
-  playback = { source, t0, from, span, clicks: [], nextCycle: 0, nextBeat: 0, raf: 0 };
+  playback = { source, t0: begin - (offset - from), from, span, clicks: [], nextCycle: 0, nextBeat: 0, raf: 0 };
+  retimeClicks();
   playback.raf = requestAnimationFrame(tickPlayback);
   syncTransport();
 }
@@ -2268,7 +2280,8 @@ function refresh() {
       : `The video starts at <b>${downbeat().toFixed(2)}s</b>, on the first beat mark. ` +
         "Drag the waveform's edges in to use one part of the song.";
     $("audioSummary").innerHTML = !marks
-      ? `Click the waveform where you hear a beat, or press B along to the music. ${state.clip ? from : ""}`
+      ? "Right-click the waveform where you hear a beat, or press B along to the music. " +
+        `Click plays from that point. ${state.clip ? from : ""}`
       : beatsAreEstimates
         ? `The estimate marked the first <b>${marks}</b> beats of ` +
           `${state.clip ? "the part in use" : "the song"} to show the pace it heard. ${from}`
