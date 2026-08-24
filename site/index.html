@@ -1167,6 +1167,7 @@ async function loadAudio(file) {
   beatsAreEstimates = false;
   state.peaks = null;
   state.clip = null;
+  view = null;
   songHistory.length = 0;
   songToken++;
   userSetTempo = false;
@@ -1242,13 +1243,57 @@ function clipOnBeats() {
   return { start: snap(state.clip.start), end: snap(state.clip.end) };
 }
 
-function computePeaks(width) {
+// The stretch of the song on screen. null is all of it; scrolling on the waveform zooms
+// in around the pointer, which is how an edge gets placed on the right beat of a long
+// song — at five minutes across one panel, a beat is two pixels wide.
+let view = null;
+
+function viewWindow() {
+  return view ?? { start: 0, end: state.audioBuffer.duration };
+}
+
+$("wave").onwheel = (e) => {
+  if (!state.audioBuffer) return;
+  e.preventDefault();
+
+  const duration = state.audioBuffer.duration;
+  const win = viewWindow();
+  const span = win.end - win.start;
+  const box = e.currentTarget.getBoundingClientRect();
+  // wheels report lines, trackpads pixels
+  const unit = e.deltaMode === 1 ? 16 : 1;
+
+  let next, start;
+  if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+    // a sideways scroll slides the window along the song
+    next = span;
+    start = win.start + ((e.deltaX * unit) / box.width) * span;
+  } else {
+    // hold the moment under the pointer still and scale the window around it. A window
+    // much under a second serves nothing: the edges land on whole beats anyway, and
+    // this is about telling neighbouring beats apart.
+    next = Math.max(1, Math.min(duration, span * Math.exp(e.deltaY * unit * 0.002)));
+    start = win.start + ((e.clientX - box.left) / box.width) * (span - next);
+  }
+  start = Math.max(0, Math.min(duration - next, start));
+  view = next >= duration ? null : { start, end: start + next };
+
+  drawWave(playback ? playback.from + Math.max(0, actx.currentTime - playback.t0) % playback.span : null);
+};
+
+// keyed on the window as well as the width, so zooming re-reads the samples
+let peaksKey = "";
+
+function computePeaks(width, from, to) {
   const data = state.audioBuffer.getChannelData(0);
-  const per = Math.max(1, Math.floor(data.length / width));
+  const rate = state.audioBuffer.sampleRate;
+  const lo = Math.floor(from * rate);
+  const hi = Math.min(Math.ceil(to * rate), data.length);
+  const per = Math.max(1, Math.floor((hi - lo) / width));
   const peaks = new Float32Array(width);
   for (let x = 0; x < width; x++) {
     let peak = 0;
-    for (let i = x * per; i < Math.min((x + 1) * per, data.length); i++) {
+    for (let i = lo + x * per; i < Math.min(lo + (x + 1) * per, hi); i++) {
       const v = Math.abs(data[i]);
       if (v > peak) peak = v;
     }
@@ -1266,15 +1311,22 @@ function drawWave(playheadSeconds = null) {
     canvas.height = Math.round(h * devicePixelRatio);
     state.peaks = null;
   }
-  if (!state.peaks || state.peaks.length !== w) state.peaks = computePeaks(w);
+  const duration = state.audioBuffer.duration;
+  const win = viewWindow();
+  const span = win.end - win.start;
+
+  const key = `${w}|${win.start}|${win.end}`;
+  if (!state.peaks || peaksKey !== key) {
+    state.peaks = computePeaks(w, win.start, win.end);
+    peaksKey = key;
+  }
 
   const ctx = canvas.getContext("2d");
   ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
   ctx.clearRect(0, 0, w, h);
 
-  const duration = state.audioBuffer.duration;
   const region = clipOnBeats();
-  const at = (t) => Math.round((t / duration) * w) + 0.5;
+  const at = (t) => Math.round(((t - win.start) / span) * w) + 0.5;
   const css = getComputedStyle(document.body);
 
   ctx.fillStyle = css.getPropertyValue("--dim");
@@ -1288,7 +1340,7 @@ function drawWave(playheadSeconds = null) {
   // the waveform and of the song's own beats, which are the only full-height marks.
   if (currentTiming) {
     const step = currentTiming.msPerBeat / 1000;
-    const spacing = (step / duration) * w;
+    const spacing = (step / span) * w;
     // narrow the triangles as they crowd, or a fast setting smears them into one band
     const half = Math.max(1.5, Math.min(5, spacing / 2.5));
     const grid = new Path2D(), loop = new Path2D();
@@ -1296,6 +1348,8 @@ function drawWave(playheadSeconds = null) {
     for (let k = 0; ; k++) {
       const t = region.start + k * step;
       if (t >= region.end) break;
+      // k keeps counting through the offscreen ones, or the loop marks would shift
+      if (t < win.start - step || t > win.end + step) continue;
       const x = at(t);
       if (k % currentTiming.beats.length === 0) {
         loop.moveTo(x - half, 0);
@@ -1319,10 +1373,12 @@ function drawWave(playheadSeconds = null) {
   // a row of lines that stopped two seconds in read as though the estimate had given up.
   // This is the song's beat, so it is 60/bpm, not the gif's hit rate.
   const pulseStep = beatSeconds();
-  if (pulseStep && (pulseStep / duration) * w >= 3) {
+  if (pulseStep && (pulseStep / span) * w >= 3) {
     const pulse = new Path2D();
     // from the downbeat's phase, so the grid covers the song ahead of the first mark too
-    for (let t = downbeat() % pulseStep; t < duration; t += pulseStep) {
+    const phase = downbeat() % pulseStep;
+    const from = phase + Math.ceil((win.start - phase) / pulseStep) * pulseStep;
+    for (let t = from; t < win.end; t += pulseStep) {
       const x = at(t);
       pulse.moveTo(x, 0);
       pulse.lineTo(x, h);
@@ -1349,7 +1405,8 @@ function drawWave(playheadSeconds = null) {
   // The song either side of the trimmed part is still worth seeing — it is what the edges
   // are being dragged against — but it is not going in the video, so it is muted rather
   // than cut off the drawing. The grips go on top, and are the only thing to grab.
-  const left = at(region.start), right = at(region.end);
+  const left = Math.max(0, Math.min(w, at(region.start)));
+  const right = Math.max(0, Math.min(w, at(region.end)));
   ctx.save();
   ctx.globalAlpha = 0.66;
   ctx.fillStyle = css.getPropertyValue("--bg");
@@ -1357,10 +1414,28 @@ function drawWave(playheadSeconds = null) {
   ctx.fillRect(right, 0, w - right, h);
   ctx.restore();
 
-  ctx.fillStyle = css.getPropertyValue("--ink");
-  for (const x of [left, right]) {
+  for (const t of [region.start, region.end]) {
+    const x = at(t);
+    if (x < -GRIP_W || x > w + GRIP_W) continue;
+    // the tab stays fully on the canvas even when its edge sits on the border
+    const tab = Math.max(GRIP_W / 2 + 1, Math.min(w - GRIP_W / 2 - 1, x));
+    ctx.fillStyle = css.getPropertyValue("--ink");
     ctx.fillRect(x - 1, 0, 2, h);
-    ctx.fillRect(x - 3.5, h / 2 - 9, 7, 18);
+    ctx.beginPath();
+    ctx.roundRect(tab - GRIP_W / 2, h / 2 - 15, GRIP_W, 30, 4);
+    ctx.fill();
+    // the two slots that say "this is a handle, take hold of it"
+    ctx.fillStyle = css.getPropertyValue("--bg");
+    ctx.fillRect(tab - 2.5, h / 2 - 8, 2, 16);
+    ctx.fillRect(tab + 0.5, h / 2 - 8, 2, 16);
+  }
+
+  // Zoomed in, a strip along the top says which stretch of the song this is
+  if (view) {
+    ctx.fillStyle = css.getPropertyValue("--line");
+    ctx.fillRect(0, 0, w, 3);
+    ctx.fillStyle = css.getPropertyValue("--dim");
+    ctx.fillRect((win.start / duration) * w, 0, Math.max(2, (span / duration) * w), 3);
   }
 
   if (playheadSeconds !== null) {
@@ -1377,20 +1452,22 @@ function drawWave(playheadSeconds = null) {
 // only becomes clear once the pointer moves, so the drag does not start until it does. Left
 // on the press it would swallow the click that takes the first beat mark away, since the
 // left edge sits right on top of that mark until someone moves it.
-const GRAB_PX = 8, DRAG_PX = 3;
+const GRAB_PX = 14, DRAG_PX = 3, GRIP_W = 11;
 let drag = null, clickWasADrag = false;
 
 function waveSeconds(event) {
   const box = $("wave").getBoundingClientRect();
-  const duration = state.audioBuffer.duration;
-  return Math.max(0, Math.min(duration, ((event.clientX - box.left) / box.width) * duration));
+  const win = viewWindow();
+  const t = win.start + ((event.clientX - box.left) / box.width) * (win.end - win.start);
+  return Math.max(0, Math.min(state.audioBuffer.duration, t));
 }
 
 function edgeUnderPointer(event) {
   const box = $("wave").getBoundingClientRect();
+  const win = viewWindow();
   const region = clipOnBeats();
   const x = event.clientX - box.left;
-  const px = (t) => (t / state.audioBuffer.duration) * box.width;
+  const px = (t) => ((t - win.start) / (win.end - win.start)) * box.width;
   const gaps = [["start", Math.abs(x - px(region.start))], ["end", Math.abs(x - px(region.end))]]
     .filter(([, gap]) => gap <= GRAB_PX)
     .sort((a, b) => a[1] - b[1]);
@@ -1444,11 +1521,11 @@ $("wave").onclick = (e) => {
   if (clickWasADrag) return;
 
   const box = e.currentTarget.getBoundingClientRect();
-  const duration = state.audioBuffer.duration;
+  const win = viewWindow();
   const t = waveSeconds(e);
 
   // Clicking an existing mark takes it away again
-  const tolerance = (8 / box.width) * duration;
+  const tolerance = (8 / box.width) * (win.end - win.start);
   const near = state.audioBeats.findIndex((b) => Math.abs(b - t) < tolerance);
   if (near >= 0) {
     rememberSong();
