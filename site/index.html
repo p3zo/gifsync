@@ -2126,16 +2126,28 @@ function findFirstBeat(mono, bpm) {
   const period = (60 / bpm) * rate;
   if (!(period >= 2) || onset.length < 2 * period) return 0;
 
+  // where the attacks land within one beat
+  const hit = (at) => {
+    const i = Math.round(at);
+    // a beat almost never lands dead on an envelope frame, so take the best of three
+    return Math.max(onset[i - 1] || 0, onset[i] || 0, onset[i + 1] || 0);
+  };
+
   let best = 0, bestScore = -1;
   for (let phase = 0; phase < Math.round(period); phase++) {
     let score = 0;
     // counted off the phase rather than stepped, so a long song does not drift
-    for (let k = 0; phase + k * period < onset.length; k++) {
-      // a beat almost never lands dead on an envelope frame, so take the best of three
-      const i = Math.round(phase + k * period);
-      score += Math.max(onset[i - 1] || 0, onset[i] || 0, onset[i + 1] || 0);
-    }
+    for (let k = 0; phase + k * period < onset.length; k++) score += hit(phase + k * period);
     if (score > bestScore) { bestScore = score; best = phase; }
+  }
+
+  // The phase alone puts the mark at the head of the song, which for anything with a
+  // quiet intro is a downbeat in silence — grid-true, and nothing to hear, so the video
+  // would open on dead air. Walk the grid to the first beat that carries a real attack.
+  let loudest = 0;
+  for (let k = 0; best + k * period < onset.length; k++) loudest = Math.max(loudest, hit(best + k * period));
+  for (let k = 0; best + k * period < onset.length; k++) {
+    if (hit(best + k * period) >= loudest * 0.25) return (best + k * period) / rate;
   }
   return best / rate;
 }
