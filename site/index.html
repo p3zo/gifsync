@@ -397,6 +397,8 @@ details.more .row { margin-top: .6rem; }
       <div class="row">
         <label>Tempo (BPM) <input type="number" id="bpm" step="0.1" min="1" value="120"></label>
         <button id="estimateBtn">Estimate tempo</button>
+        <button id="halfBtn" title="Halve the tempo">&divide;2</button>
+        <button id="doubleBtn" title="Double the tempo">&times;2</button>
       </div>
       <div class="row">
         <label>The GIF hits
@@ -2172,6 +2174,18 @@ function getMsPerBeat() {
 }
 
 $("bpm").oninput = () => { userSetTempo = true; refresh(); };
+
+// The tempo model names half or twice the real tempo often enough to be worth one button
+// each: which of the three it is takes one listen to tell, and no listening at all to fix.
+for (const [id, factor] of [["halfBtn", 0.5], ["doubleBtn", 2]]) {
+  $(id).onclick = () => {
+    const bpm = parseFloat($("bpm").value);
+    if (!(bpm > 0)) return;
+    userSetTempo = true;
+    $("bpm").value = (bpm * factor).toFixed(1);
+    refresh();
+  };
+}
 
 for (const id of ["hits", "interpolation", "clickTrack"]) {
   $(id).oninput = refresh;
