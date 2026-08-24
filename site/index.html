@@ -2020,7 +2020,24 @@ async function estimateSong({ keepExistingBeats }) {
   button.textContent = "Listening…";
 
   try {
-    const mono = await renderMono(state.audioBuffer);
+    // The part of the song in use is the part being listened to: the rest may well be an
+    // intro or an outro in a different feel, which is exactly why it was trimmed away.
+    const region = clipOnBeats();
+    const whole = await renderMono(state.audioBuffer);
+    const slice = state.clip
+      ? whole.subarray(Math.floor(region.start * TEMPO_SR), Math.floor(region.end * TEMPO_SR))
+      : whole;
+
+    // The model reads 256-frame patches, about 12s. A shorter part is tiled end to end
+    // rather than padded: it is going to loop under the gif anyway, repeats carry the
+    // same tempo, and each seam falls where the loop will really restart.
+    const NEED = (TEMPO_PATCH - 1) * TEMPO_HOP + TEMPO_FRAME;
+    let mono = slice;
+    if (slice.length && slice.length < NEED) {
+      mono = new Float32Array(Math.ceil(NEED / slice.length) * slice.length);
+      for (let at = 0; at < mono.length; at += slice.length) mono.set(slice, at);
+    }
+
     const { bpm, confidence } = await estimateBpm(mono, (note) => {
       if (token === songToken) $("estimateNote").textContent = note;
     });
@@ -2034,16 +2051,18 @@ async function estimateSong({ keepExistingBeats }) {
     if (!(keepExistingBeats && state.audioBeats.length)) {
       if (!keepExistingBeats) rememberSong();
       const period = 60 / bpm;
-      const first = findFirstBeat(mono, bpm);
+      // the phase comes off the untiled slice, so a seam cannot pass for a downbeat
+      const first = region.start + findFirstBeat(slice, bpm);
       // Four marks: one would be enough to say where the animation starts, and four say
       // plainly on the waveform how fast the machine thinks the song is going.
       state.audioBeats = [0, 1, 2, 3]
         .map((k) => first + k * period)
-        .filter((t) => t < state.audioBuffer.duration);
+        .filter((t) => t < region.end);
       beatsAreEstimates = true;
     }
 
-    $("estimateNote").innerHTML = `Estimated <b>${bpm} BPM</b>.` +
+    $("estimateNote").innerHTML =
+      `Estimated <b>${bpm} BPM</b>${state.clip ? " from the part of the song in use" : ""}.` +
       // the model always names a tempo; when the vote is this split it is often the wrong one
       (confidence < 0.5 ? ` <span class="warn">It is not sure though, so play it back and check.</span>` : "");
     refresh();
@@ -2147,7 +2166,8 @@ function refresh() {
     $("audioSummary").innerHTML = !marks
       ? `Click the waveform where you hear a beat, or press B along to the music. ${state.clip ? from : ""}`
       : beatsAreEstimates
-        ? `The estimate marked the song's first <b>${marks}</b> beats to show the pace it heard. ${from}`
+        ? `The estimate marked the first <b>${marks}</b> beats of ` +
+          `${state.clip ? "the part in use" : "the song"} to show the pace it heard. ${from}`
         : `<b>${marks}</b> beat${marks > 1 ? "s" : ""} marked. ${from}`;
     $("wholeSongBtn").hidden = !state.clip;
     drawWave(playback ? playback.from + Math.max(0, actx.currentTime - playback.t0) % playback.span : null);
