@@ -2038,8 +2038,9 @@ async function estimateSong({ keepExistingBeats }) {
     // The part of the song in use is the part being listened to: the rest may well be an
     // intro or an outro in a different feel, which is exactly why it was trimmed away.
     const region = clipOnBeats();
+    const fromClip = !!state.clip;
     const whole = await renderMono(state.audioBuffer);
-    const slice = state.clip
+    const slice = fromClip
       ? whole.subarray(Math.floor(region.start * TEMPO_SR), Math.floor(region.end * TEMPO_SR))
       : whole;
 
@@ -2077,7 +2078,7 @@ async function estimateSong({ keepExistingBeats }) {
     }
 
     $("estimateNote").innerHTML =
-      `Estimated <b>${bpm} BPM</b>${state.clip ? " from the part of the song in use" : ""}.` +
+      `Estimated <b>${bpm} BPM</b>${fromClip ? " from the part of the song in use" : ""}.` +
       // the model always names a tempo; when the vote is this split it is often the wrong one
       (confidence < 0.5 ? ` <span class="warn">It is not sure though, so play it back and check.</span>` : "");
     refresh();
