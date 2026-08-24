@@ -135,6 +135,8 @@ section.is-current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--ac
 }
 .empty[hidden] { display: none; }
 .row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+/* flex outranks the browser's own [hidden] rule, same as .empty above */
+.row[hidden] { display: none; }
 .row + .row { margin-top: .75rem; }
 button {
   font: inherit; font-size: .875rem; padding: .35rem .7rem; border-radius: 6px;
@@ -400,6 +402,11 @@ details.more .row { margin-top: .6rem; }
         <button id="halfBtn" title="Halve the tempo">&divide;2</button>
         <button id="doubleBtn" title="Double the tempo">&times;2</button>
       </div>
+      <div class="row" id="startFrameRow" hidden>
+        <label>The song's first beat lands on
+          <select id="startFrame"></select>
+        </label>
+      </div>
       <div class="row">
         <label>The GIF hits
           <select id="hits">
@@ -446,7 +453,10 @@ details.more .row { margin-top: .6rem; }
     <div class="row legend">
       <span><svg class="glyph g-mark" viewBox="0 0 12 18" aria-hidden="true">
         <line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="2"/></svg>
-        beats in the song</span>
+        beats you marked</span>
+      <span><svg class="glyph g-mark" viewBox="0 0 12 18" aria-hidden="true">
+        <line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="1" opacity=".3"/></svg>
+        every beat at this tempo</span>
       <span><svg class="glyph g-grid" viewBox="0 0 12 18" aria-hidden="true">
         <polygon points="1,18 11,18 6,9" fill="currentColor"/></svg>
         where the gif's beat frames land</span>
@@ -592,7 +602,8 @@ function remember(history, snapshot) {
 }
 
 const state = {
-  gifFile: null, frames: [], holds: [], width: 0, height: 0, cur: 0, beats: new Set(), credit: null,
+  gifFile: null, frames: [], holds: [], width: 0, height: 0, cur: 0, beats: new Set(),
+  startFrame: null, credit: null,
   audioFile: null, audioBuffer: null, audioBeats: [], peaks: null, clip: null,
 };
 
@@ -673,6 +684,7 @@ async function loadGif(file) {
   state.height = frames[0].height;
   state.cur = 0;
   state.beats = new Set();
+  state.startFrame = null;
   state.credit = null;
   markHistory.length = 0;
 
@@ -1187,9 +1199,9 @@ async function loadAudio(file) {
   if (SERVED) estimateSong({ keepExistingBeats: true });
 }
 
-// Whether the marks on the waveform were placed by the estimate or by a person. Four marks
-// bunched at the head of a long song look like something went wrong; they are the estimate
-// showing its working, and the summary has to say so.
+// Whether the mark on the waveform was placed by the estimate or by a person. A single
+// mark at the head of a long song looks like something went wrong; it is the estimate
+// naming the downbeat, and the summary has to say so.
 let beatsAreEstimates = false;
 
 // The tempo is read off the beats, and the trimmed part of the song is rounded onto the
@@ -1502,6 +1514,7 @@ function edgeUnderPointer(event) {
 }
 
 $("wave").onpointerdown = (e) => {
+  if (e.button !== 0) return;
   clickWasADrag = false;
   const edge = edgeUnderPointer(e);
   if (!edge) return;
@@ -1567,12 +1580,17 @@ $("wave").onpointerup = () => {
 
 $("wave").onclick = (e) => {
   if (clickWasADrag) return;
+  startPlayback(waveSeconds(e));
+};
+
+$("wave").oncontextmenu = (e) => {
+  e.preventDefault();
 
   const box = e.currentTarget.getBoundingClientRect();
   const win = viewWindow();
   const t = waveSeconds(e);
 
-  // Clicking an existing mark takes it away again
+  // Right-clicking an existing mark takes it away again
   const tolerance = (8 / box.width) * (win.end - win.start);
   const near = state.audioBeats.findIndex((b) => Math.abs(b - t) < tolerance);
   if (near >= 0) {
@@ -1642,7 +1660,7 @@ wireDrop("audioDrop", "audioInput", loadAudio);
 // so the two can never end up playing at once
 let playback = null;
 
-function startPlayback() {
+function startPlayback(at = null) {
   stopPlayback();
   stopGifPlayback();
   actx.resume();
@@ -1655,6 +1673,9 @@ function startPlayback() {
     return;
   }
 
+  // where to drop the needle: the loop's start, or the moment that was clicked
+  const offset = at === null ? from : Math.max(from, Math.min(region.end - 0.01, at));
+
   const source = actx.createBufferSource();
   source.buffer = state.audioBuffer;
   source.connect(actx.destination);
@@ -1665,11 +1686,14 @@ function startPlayback() {
   source.loopStart = from;
   source.loopEnd = region.end;
 
-  const t0 = actx.currentTime + 0.08;
-  source.start(t0, from);
+  // t0 stays the wall time the loop's start would have played at, so starting mid-loop
+  // changes nothing else: position = from + elapsed % span holds from the first frame
+  const begin = actx.currentTime + 0.08;
+  source.start(begin, offset);
   source.onended = () => { if (playback?.source === source) stopPlayback(); };
 
-  playback = { source, t0, from, span, clicks: [], nextCycle: 0, nextBeat: 0, raf: 0 };
+  playback = { source, t0: begin - (offset - from), from, span, clicks: [], nextCycle: 0, nextBeat: 0, raf: 0 };
+  retimeClicks();
   playback.raf = requestAnimationFrame(tickPlayback);
   syncTransport();
 }
@@ -2144,11 +2168,9 @@ async function estimateSong({ keepExistingBeats }) {
       const period = 60 / bpm;
       // the phase comes off the untiled slice, so a seam cannot pass for a downbeat
       const first = region.start + findFirstBeat(slice, bpm);
-      // Four marks: one would be enough to say where the animation starts, and four say
-      // plainly on the waveform how fast the machine thinks the song is going.
-      state.audioBeats = [0, 1, 2, 3]
-        .map((k) => first + k * period)
-        .filter((t) => t < region.end);
+      // One mark says where the video starts. The tempo the estimate heard needs no
+      // marks of its own: it is already drawn along the whole song as the faint grid.
+      state.audioBeats = first < region.end ? [first] : [];
       beatsAreEstimates = true;
     }
 
@@ -2183,6 +2205,11 @@ function getMsPerBeat() {
 
 $("bpm").oninput = () => { userSetTempo = true; refresh(); };
 
+$("startFrame").onchange = () => {
+  state.startFrame = parseInt($("startFrame").value, 10);
+  refresh();
+};
+
 // The tempo model names half or twice the real tempo often enough to be worth one button
 // each: which of the three it is takes one listen to tell, and no listening at all to fix.
 for (const [id, factor] of [["halfBtn", 0.5], ["doubleBtn", 2]]) {
@@ -2208,7 +2235,15 @@ function computeTiming() {
   const msPerBeat = getMsPerBeat();
   if (!beats.length || !msPerBeat || !state.frames.length) return null;
 
-  const durations = getDurations(beats, msPerBeat, state.frames.length, $("interpolation").value);
+  const raw = getDurations(beats, msPerBeat, state.frames.length, $("interpolation").value);
+
+  // Which marked frame takes the song's first beat. The loop can start on any of them;
+  // the durations come out aligned to the earliest mark, so starting elsewhere means
+  // rotating them by the frames skipped over. A choice whose frame is no longer marked
+  // reads as the earliest mark, and the picker shows that.
+  const startIx = Math.max(0, beats.indexOf(state.startFrame));
+  const shift = beats[startIx] - beats[0];
+  const durations = shift ? [...raw.slice(shift), ...raw.slice(0, shift)] : raw;
 
   // Cumulative onset of each frame within one loop, so a time maps to a frame by search
   const onsets = [0];
@@ -2216,7 +2251,7 @@ function computeTiming() {
 
   return {
     beats, msPerBeat, durations, onsets,
-    order: getFrameOrder(beats[0], state.frames.length),
+    order: getFrameOrder(beats[startIx], state.frames.length),
     loopMs: beats.length * msPerBeat,
   };
 }
@@ -2248,6 +2283,14 @@ function refresh() {
     ? `<b>${beats.length}</b> frame${beats.length > 1 ? "s" : ""} marked: the beat lands on each of them in turn.`
     : "No frames marked yet. Step through the GIF and mark the ones the beat should land on.";
 
+  // With one mark there is nothing to choose; with more, any of them can take the downbeat
+  $("startFrameRow").hidden = beats.length < 2;
+  if (beats.length >= 2) {
+    const picker = $("startFrame");
+    picker.replaceChildren(...beats.map((f) => new Option(`frame ${f + 1}`, f)));
+    picker.value = beats[Math.max(0, beats.indexOf(state.startFrame))];
+  }
+
   currentTiming = null;
   let problem = "";
   try { currentTiming = computeTiming(); } catch (err) { problem = err.message; }
@@ -2268,10 +2311,11 @@ function refresh() {
       : `The video starts at <b>${downbeat().toFixed(2)}s</b>, on the first beat mark. ` +
         "Drag the waveform's edges in to use one part of the song.";
     $("audioSummary").innerHTML = !marks
-      ? `Click the waveform where you hear a beat, or press B along to the music. ${state.clip ? from : ""}`
+      ? "Right-click the waveform where you hear a beat, or press B along to the music. " +
+        `Click plays from that point. ${state.clip ? from : ""}`
       : beatsAreEstimates
-        ? `The estimate marked the first <b>${marks}</b> beats of ` +
-          `${state.clip ? "the part in use" : "the song"} to show the pace it heard. ${from}`
+        ? `The estimate marked the first beat of ${state.clip ? "the part in use" : "the song"}; ` +
+          `the faint lines are the rest of its beats at this tempo. ${from}`
         : `<b>${marks}</b> beat${marks > 1 ? "s" : ""} marked. ${from}`;
     $("wholeSongBtn").hidden = !state.clip;
     $("zoomOutBtn").hidden = !view;
