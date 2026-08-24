@@ -1705,19 +1705,31 @@ function pumpClicks() {
     if (at >= horizon) break;
 
     if (at > actx.currentTime) {
-      const osc = actx.createOscillator(), gain = actx.createGain();
-      osc.frequency.value = 1500;
-      gain.gain.setValueAtTime(0.07, at);
-      gain.gain.exponentialRampToValueAtTime(0.001, at + 0.04);
-      osc.connect(gain).connect(actx.destination);
-      osc.start(at);
-      osc.stop(at + 0.05);
-      playback.clicks.push({ osc, at });
+      // the loop's own first beat is worth hearing apart from the rest of them
+      const first = currentTiming && playback.nextBeat % currentTiming.beats.length === 0;
+      playback.clicks.push({ osc: click(at, first), at });
     }
     playback.nextBeat++;
   }
 
   playback.clicks = playback.clicks.filter((c) => c.at > actx.currentTime - 1);
+}
+
+// A quiet sine sits at 1500Hz, which is where a mix is busiest, and vanishes into it. A
+// metronome has to cut through what it is counting: an edge to the tone and a fall in
+// pitch give it an attack to hear, and the level has to stand up to the music rather than
+// duck under it.
+function click(at, first) {
+  const osc = actx.createOscillator(), gain = actx.createGain();
+  osc.type = "square";
+  osc.frequency.setValueAtTime(first ? 2400 : 1600, at);
+  osc.frequency.exponentialRampToValueAtTime(first ? 1000 : 700, at + 0.03);
+  gain.gain.setValueAtTime(first ? 0.5 : 0.32, at);
+  gain.gain.exponentialRampToValueAtTime(0.001, at + 0.045);
+  osc.connect(gain).connect(actx.destination);
+  osc.start(at);
+  osc.stop(at + 0.06);
+  return osc;
 }
 
 function clearPendingClicks() {
