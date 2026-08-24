@@ -158,7 +158,6 @@ input[type=color] { width: 2.4rem; height: 1.7rem; padding: 1px; border: 1px sol
 .legend span { display: inline-flex; align-items: center; gap: .4rem; color: var(--dim); font-size: .8rem; }
 .glyph { width: 12px; height: 18px; flex: none; }
 .g-mark { color: var(--accent); } .g-grid { color: var(--grid); } .g-loop { color: var(--loop); }
-.g-edge { color: var(--ink); }
 .drop {
   border: 1.5px dashed var(--line); border-radius: 8px; padding: 1.75rem 1rem; text-align: center;
   color: var(--dim); cursor: pointer; font-size: .9rem;
@@ -399,6 +398,17 @@ details.more .row { margin-top: .6rem; }
         <label>Tempo (BPM) <input type="number" id="bpm" step="0.1" min="1" value="120"></label>
         <button id="estimateBtn">Estimate tempo</button>
       </div>
+      <div class="row">
+        <label>The GIF hits
+          <select id="hits">
+            <option value="0.25">every 4 beats</option>
+            <option value="0.5">every 2 beats</option>
+            <option value="1" selected>every beat</option>
+            <option value="2">twice a beat</option>
+            <option value="4">four times a beat</option>
+          </select>
+        </label>
+      </div>
       <div class="say" id="estimateNote"></div>
       <div class="say" id="timingSummary"></div>
       <details class="more">
@@ -408,17 +418,6 @@ details.more .row { margin-top: .6rem; }
           <span id="tapBeatWrap"><button id="tapBeatBtn">Tap a beat (B)</button></span>
           <button id="undoBeatBtn">Undo</button>
           <button id="clearBeatsBtn">Clear all beats</button>
-        </div>
-        <div class="row">
-          <label>The GIF hits
-            <select id="hits">
-              <option value="0.25">every 4 beats</option>
-              <option value="0.5">every 2 beats</option>
-              <option value="1" selected>every beat</option>
-              <option value="2">twice a beat</option>
-              <option value="4">four times a beat</option>
-            </select>
-          </label>
         </div>
         <div class="row">
           <label>Between beats
@@ -450,10 +449,6 @@ details.more .row { margin-top: .6rem; }
       <span><svg class="glyph g-loop" viewBox="0 0 12 18" aria-hidden="true">
         <polygon points="1,0 11,0 6,9" fill="currentColor"/></svg>
         where the gif's loop restarts</span>
-      <span><svg class="glyph g-edge" viewBox="0 0 12 18" aria-hidden="true">
-        <line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="2"/>
-        <rect x="3" y="5" width="6" height="8" fill="currentColor"/></svg>
-        the part of the song used — drag to change</span>
     </div>
   </div>
 
@@ -2166,7 +2161,8 @@ function refresh() {
     const from = state.clip
       ? `The video is made from <b>${timeLabel(region.start)}</b> to <b>${timeLabel(region.end)}</b>` +
         ` — <b>${(region.end - region.start).toFixed(1)}s</b> of the song.`
-      : `The video starts at <b>${downbeat().toFixed(2)}s</b>, on the first beat mark.`;
+      : `The video starts at <b>${downbeat().toFixed(2)}s</b>, on the first beat mark. ` +
+        "Drag the waveform's edges in to use one part of the song.";
     $("audioSummary").innerHTML = !marks
       ? `Click the waveform where you hear a beat, or press B along to the music. ${state.clip ? from : ""}`
       : beatsAreEstimates
