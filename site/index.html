@@ -1538,7 +1538,21 @@ function edgeUnderPointer(event) {
   return gaps.length ? gaps[0][0] : null;
 }
 
+// A phone has no wheel, so two fingers zoom the waveform instead. The moment a second
+// finger lands, any edge drag in flight is dropped: two fingers mean zoom, not trim.
+const touches = new Map();
+let pinchWidth = null;
+
 $("wave").onpointerdown = (e) => {
+  if (e.pointerType === "touch") {
+    touches.set(e.pointerId, e.clientX);
+    $("wave").setPointerCapture(e.pointerId);
+    if (touches.size >= 2) {
+      drag = null;
+      pinchWidth = null;
+      return;
+    }
+  }
   if (e.button !== 0) return;
   clickWasADrag = false;
   const edge = edgeUnderPointer(e);
@@ -1547,7 +1561,28 @@ $("wave").onpointerdown = (e) => {
   $("wave").setPointerCapture(e.pointerId);
 };
 
+function pinch() {
+  const [a, b] = [...touches.values()];
+  const width = Math.abs(a - b);
+  const mid = (a + b) / 2;
+  if (pinchWidth && width > 8) {
+    const box = $("wave").getBoundingClientRect();
+    const win = viewWindow();
+    const span = win.end - win.start;
+    // hold the moment between the fingers still while the window scales around it —
+    // and follows it, which is what makes two fingers moving together a pan
+    const frac = (mid - box.left) / box.width;
+    const next = span * (pinchWidth / width);
+    setView(win.start + frac * span - frac * next, next);
+    redrawWave();
+  }
+  pinchWidth = width;
+}
+
 $("wave").onpointermove = (e) => {
+  if (touches.has(e.pointerId)) touches.set(e.pointerId, e.clientX);
+  if (touches.size >= 2) { pinch(); return; }
+
   if (!drag) {
     $("wave").classList.toggle("grab", !!edgeUnderPointer(e));
     return;
@@ -1580,12 +1615,15 @@ $("wave").onpointermove = (e) => {
   refresh();
 };
 
-$("wave").onpointercancel = () => {
+$("wave").onpointercancel = (e) => {
+  touches.delete(e.pointerId);
+  pinchWidth = null;
   drag = null;
   refresh();
 };
 
-$("wave").onpointerup = () => {
+$("wave").onpointerup = (e) => {
+  if (touches.delete(e.pointerId)) pinchWidth = null;
   clickWasADrag = !!drag?.moved;
   drag = null;
   if (!clickWasADrag) return;
