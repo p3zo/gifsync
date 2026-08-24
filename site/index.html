@@ -455,7 +455,7 @@ details.more .row { margin-top: .6rem; }
         <line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="2"/></svg>
         beats you marked</span>
       <span><svg class="glyph g-mark" viewBox="0 0 12 18" aria-hidden="true">
-        <line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="1" opacity=".3"/></svg>
+        <line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="1" opacity=".55"/></svg>
         every beat at this tempo</span>
       <span><svg class="glyph g-grid" viewBox="0 0 12 18" aria-hidden="true">
         <polygon points="1,18 11,18 6,9" fill="currentColor"/></svg>
@@ -604,7 +604,7 @@ function remember(history, snapshot) {
 const state = {
   gifFile: null, frames: [], holds: [], width: 0, height: 0, cur: 0, beats: new Set(),
   startFrame: null, credit: null,
-  audioFile: null, audioBuffer: null, audioBeats: [], peaks: null, clip: null,
+  audioFile: null, audioBuffer: null, audioBeats: [], peaks: null, peakScale: 1, clip: null,
 };
 
 /* ---------------------------------------------------------------- capabilities */
@@ -1178,6 +1178,17 @@ async function loadAudio(file) {
     throw new Error(`${file.name} could not be read as audio. ${err.message}`);
   }
   state.audioFile = file;
+  // The bars are drawn against the song's own loudest moment, not full scale: a quietly
+  // mastered recording still has to fill the panel, or there is nothing to drag against.
+  {
+    const data = state.audioBuffer.getChannelData(0);
+    let peak = 0;
+    for (let i = 0; i < data.length; i++) {
+      const v = Math.abs(data[i]);
+      if (v > peak) peak = v;
+    }
+    state.peakScale = 1 / Math.max(peak, 1e-6);
+  }
   state.audioBeats = [];
   beatsAreEstimates = false;
   state.peaks = null;
@@ -1203,6 +1214,9 @@ async function loadAudio(file) {
 // mark at the head of a long song looks like something went wrong; it is the estimate
 // naming the downbeat, and the summary has to say so.
 let beatsAreEstimates = false;
+// ...and whether that estimate listened to a trimmed part or the whole song. The summary
+// reads this rather than the live trim, which may have changed since it listened.
+let estimateUsedClip = false;
 
 // The tempo is read off the beats, and the trimmed part of the song is rounded onto the
 // grid those beats set, so putting a beat back has to put both of those back with it
@@ -1370,7 +1384,7 @@ function drawWave(playheadSeconds = null) {
 
   ctx.fillStyle = css.getPropertyValue("--dim");
   for (let x = 0; x < w; x++) {
-    const bar = Math.max(1, state.peaks[x] * h * 0.9);
+    const bar = Math.max(1, Math.min(1, state.peaks[x] * state.peakScale) * h * 0.9);
     ctx.fillRect(x, (h - bar) / 2, 1, bar);
   }
 
@@ -1380,17 +1394,24 @@ function drawWave(playheadSeconds = null) {
   if (currentTiming) {
     const step = currentTiming.msPerBeat / 1000;
     const spacing = (step / span) * w;
-    // narrow the triangles as they crowd, or a fast setting smears them into one band
+    // narrow the triangles as they crowd, or a fast setting smears them into one band —
+    // and once they would touch anyway, leave them out: over a whole song they read as a
+    // solid fringe saying nothing. The loop marks come every few beats, so they stay
+    // legible well after the per-beat ones have gone; each kind goes by its own spacing.
     const half = Math.max(1.5, Math.min(5, spacing / 2.5));
+    const showGrid = spacing >= 6;
+    const showLoop = spacing * currentTiming.beats.length >= 6;
     const grid = new Path2D(), loop = new Path2D();
 
-    for (let k = 0; ; k++) {
+    for (let k = 0; showGrid || showLoop; k++) {
       const t = region.start + k * step;
       if (t >= region.end) break;
       // k keeps counting through the offscreen ones, or the loop marks would shift
       if (t < win.start - step || t > win.end + step) continue;
+      const isLoop = k % currentTiming.beats.length === 0;
+      if (isLoop ? !showLoop : !showGrid) continue;
       const x = at(t);
-      if (k % currentTiming.beats.length === 0) {
+      if (isLoop) {
         loop.moveTo(x - half, 0);
         loop.lineTo(x + half, 0);
         loop.lineTo(x, 9);
@@ -1399,7 +1420,7 @@ function drawWave(playheadSeconds = null) {
         grid.lineTo(x + half, h);
         grid.lineTo(x, h - 9);
       }
-      (k % currentTiming.beats.length === 0 ? loop : grid).closePath();
+      (isLoop ? loop : grid).closePath();
     }
 
     ctx.fillStyle = css.getPropertyValue("--grid");
@@ -1478,12 +1499,16 @@ function drawWave(playheadSeconds = null) {
   }
 
   if (playheadSeconds !== null) {
-    ctx.strokeStyle = css.getPropertyValue("--ink");
-    ctx.lineWidth = 1;
+    const x = at(playheadSeconds);
+    ctx.fillStyle = css.getPropertyValue("--ink");
+    ctx.fillRect(x - 1, 0, 2, h);
+    // a cap, so it reads even where the beat lines crowd
     ctx.beginPath();
-    ctx.moveTo(at(playheadSeconds), 0);
-    ctx.lineTo(at(playheadSeconds), h);
-    ctx.stroke();
+    ctx.moveTo(x - 5, 0);
+    ctx.lineTo(x + 5, 0);
+    ctx.lineTo(x, 7);
+    ctx.closePath();
+    ctx.fill();
   }
 }
 
@@ -1513,7 +1538,21 @@ function edgeUnderPointer(event) {
   return gaps.length ? gaps[0][0] : null;
 }
 
+// A phone has no wheel, so two fingers zoom the waveform instead. The moment a second
+// finger lands, any edge drag in flight is dropped: two fingers mean zoom, not trim.
+const touches = new Map();
+let pinchWidth = null;
+
 $("wave").onpointerdown = (e) => {
+  if (e.pointerType === "touch") {
+    touches.set(e.pointerId, e.clientX);
+    $("wave").setPointerCapture(e.pointerId);
+    if (touches.size >= 2) {
+      drag = null;
+      pinchWidth = null;
+      return;
+    }
+  }
   if (e.button !== 0) return;
   clickWasADrag = false;
   const edge = edgeUnderPointer(e);
@@ -1522,7 +1561,28 @@ $("wave").onpointerdown = (e) => {
   $("wave").setPointerCapture(e.pointerId);
 };
 
+function pinch() {
+  const [a, b] = [...touches.values()];
+  const width = Math.abs(a - b);
+  const mid = (a + b) / 2;
+  if (pinchWidth && width > 8) {
+    const box = $("wave").getBoundingClientRect();
+    const win = viewWindow();
+    const span = win.end - win.start;
+    // hold the moment between the fingers still while the window scales around it —
+    // and follows it, which is what makes two fingers moving together a pan
+    const frac = (mid - box.left) / box.width;
+    const next = span * (pinchWidth / width);
+    setView(win.start + frac * span - frac * next, next);
+    redrawWave();
+  }
+  pinchWidth = width;
+}
+
 $("wave").onpointermove = (e) => {
+  if (touches.has(e.pointerId)) touches.set(e.pointerId, e.clientX);
+  if (touches.size >= 2) { pinch(); return; }
+
   if (!drag) {
     $("wave").classList.toggle("grab", !!edgeUnderPointer(e));
     return;
@@ -1555,12 +1615,15 @@ $("wave").onpointermove = (e) => {
   refresh();
 };
 
-$("wave").onpointercancel = () => {
+$("wave").onpointercancel = (e) => {
+  touches.delete(e.pointerId);
+  pinchWidth = null;
   drag = null;
   refresh();
 };
 
-$("wave").onpointerup = () => {
+$("wave").onpointerup = (e) => {
+  if (touches.delete(e.pointerId)) pinchWidth = null;
   clickWasADrag = !!drag?.moved;
   drag = null;
   if (!clickWasADrag) return;
@@ -2104,16 +2167,28 @@ function findFirstBeat(mono, bpm) {
   const period = (60 / bpm) * rate;
   if (!(period >= 2) || onset.length < 2 * period) return 0;
 
+  // where the attacks land within one beat
+  const hit = (at) => {
+    const i = Math.round(at);
+    // a beat almost never lands dead on an envelope frame, so take the best of three
+    return Math.max(onset[i - 1] || 0, onset[i] || 0, onset[i + 1] || 0);
+  };
+
   let best = 0, bestScore = -1;
   for (let phase = 0; phase < Math.round(period); phase++) {
     let score = 0;
     // counted off the phase rather than stepped, so a long song does not drift
-    for (let k = 0; phase + k * period < onset.length; k++) {
-      // a beat almost never lands dead on an envelope frame, so take the best of three
-      const i = Math.round(phase + k * period);
-      score += Math.max(onset[i - 1] || 0, onset[i] || 0, onset[i + 1] || 0);
-    }
+    for (let k = 0; phase + k * period < onset.length; k++) score += hit(phase + k * period);
     if (score > bestScore) { bestScore = score; best = phase; }
+  }
+
+  // The phase alone puts the mark at the head of the song, which for anything with a
+  // quiet intro is a downbeat in silence — grid-true, and nothing to hear, so the video
+  // would open on dead air. Walk the grid to the first beat that carries a real attack.
+  let loudest = 0;
+  for (let k = 0; best + k * period < onset.length; k++) loudest = Math.max(loudest, hit(best + k * period));
+  for (let k = 0; best + k * period < onset.length; k++) {
+    if (hit(best + k * period) >= loudest * 0.25) return (best + k * period) / rate;
   }
   return best / rate;
 }
@@ -2172,6 +2247,7 @@ async function estimateSong({ keepExistingBeats }) {
       // marks of its own: it is already drawn along the whole song as the faint grid.
       state.audioBeats = first < region.end ? [first] : [];
       beatsAreEstimates = true;
+      estimateUsedClip = fromClip;
     }
 
     $("estimateNote").innerHTML =
@@ -2314,7 +2390,7 @@ function refresh() {
       ? "Right-click the waveform where you hear a beat, or press B along to the music. " +
         `Click plays from that point. ${state.clip ? from : ""}`
       : beatsAreEstimates
-        ? `The estimate marked the first beat of ${state.clip ? "the part in use" : "the song"}; ` +
+        ? `The estimate marked the first beat of ${estimateUsedClip ? "the part in use" : "the song"}; ` +
           `the faint lines are the rest of its beats at this tempo. ${from}`
         : `<b>${marks}</b> beat${marks > 1 ? "s" : ""} marked. ${from}`;
     $("wholeSongBtn").hidden = !state.clip;
