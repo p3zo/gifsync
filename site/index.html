@@ -391,7 +391,7 @@ details.more .row { margin-top: .6rem; }
     </div>
     <div class="stagecontrols">
       <div class="row">
-        <button id="previewBtn" class="primary">Play preview (space)</button>
+        <button id="previewBtn" class="primary">Play preview (spacebar)</button>
         <span class="say" id="previewPos"></span>
       </div>
       <div class="row">
@@ -934,7 +934,7 @@ $("undoMarkBtn").onclick = () => {
 };
 
 addEventListener("keydown", (e) => {
-  if (e.target.matches("input, select, textarea")) return;
+  if (e.target.matches("textarea, select, input:not([type=checkbox]):not([type=radio])")) return;
   if (e.key === "ArrowLeft") { step(-1); e.preventDefault(); }
   else if (e.key === "ArrowRight") { step(1); e.preventDefault(); }
   else if (e.key === " ") {
@@ -1658,7 +1658,7 @@ function tickPlayback() {
 }
 
 function syncTransport() {
-  $("previewBtn").textContent = playback ? "Stop (space)" : "Play preview (space)";
+  $("previewBtn").textContent = playback ? "Stop (spacebar)" : "Play preview (spacebar)";
   $("tapBeatBtn").disabled = !playback;
   // a disabled button swallows its own hover, so the reason hangs off the wrapper
   $("tapBeatWrap").title = playback
